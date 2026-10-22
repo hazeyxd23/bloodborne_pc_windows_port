@@ -574,6 +574,7 @@ FogAction HostFogAction(const BossGate& g, bool guest_starts_on, bool intro_done
 
 #include "coop_hooks.h"
 #include "party_b2.h"
+#include "party_balance.h"
 #include "party_death_rules.h"
 #include "game_state.h"
 #include "party_director.h"
@@ -3039,6 +3040,12 @@ bool StandAtChr(std::int32_t entity, float dist, float angle_deg, std::string* w
     const std::uint64_t c = chr ? chr : GuestSvcFindChr(std::uint32_t(entity));
     if (!c || !SafeRead(c + 0xc0, p, sizeof p) || !SafeRead(c + 0xd0, r, sizeof r)) {
         return false;
+    }
+    // Where it stands now (its physics position): +0xc0 can lag far behind a chr that walked
+    // (D11 nf run 2: Henryk 14 m from his +0xc0 spot, the guest's R1s hit the air).
+    float now[3] = {};
+    if (balance::ChrPosition(c, now)) {
+        p[0] = now[0], p[1] = now[1], p[2] = now[2];
     }
     // The chr's front: forward(yaw) = (-sin, -cos), yaw = +0xd0 [1].
     return PutLocal(p, -std::sin(r[1]), -std::cos(r[1]), dist, angle_deg, what);
