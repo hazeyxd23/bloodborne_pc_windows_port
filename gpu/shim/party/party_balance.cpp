@@ -1057,8 +1057,9 @@ void ChrDumpTick(const GameSnapshot& s) {
                           double(p[0]), double(p[1]), double(p[2]), double(d), off ? " DISABLED" : "");
             lines.push_back(b);
             char k[48];
-            // HP too (D11: an NPC hunter's HP on every game during a fight), at most one dump a second
-            std::snprintf(k, sizeof k, "%d/%d/%d;", entity, hp, off ? 1 : 0);
+            // HP and team too (D11: an NPC hunter's HP on every game during a fight, its team switch
+            // 2004[2] mid-fight), at most one dump a second
+            std::snprintf(k, sizeof k, "%d/%d/%d/%d;", entity, hp, off ? 1 : 0, Field<int>(chr, 0x88, -1));
             sig += k;
         }
     }
