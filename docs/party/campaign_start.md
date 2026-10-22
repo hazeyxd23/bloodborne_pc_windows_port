@@ -272,7 +272,7 @@ Only in the player's own world (role 0, not loading, main thread):
 * The Old Hunter Bell (4312, lot 10050) is not needed.
 * **Do not** grant Insight by default. If wanted, SpEffect **4680** = +1 Insight (common 9350); 1 Insight
   also wakes the Doll at the next Dream load (needs 9401).
-* Starting weapons are not granted: the prologue gives them. For §4.5, `0x131CB70(0, 0 /*weapon*/, id, 1)`.
+* Starting weapons are not granted: the prologue gives them. For §4.5, `0x131CB70(0, 0 /*weapon*/, id, 1)`. Each player's pick is its own (0.7.3: 12101020 / 12101021 are never_sync; a done flag synced in by an older build without an own pick is cleared in the own world, items.md 10.8).
 
 ### 4.4 Director sequencing (state machine additions to A5)
 

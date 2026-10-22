@@ -226,6 +226,7 @@ major / minor / ok; **fix** = done here (F#), proposal (P#, list at the end) or 
 | Oedon Tomb doors | ObjAct 2410001 / 2410080 need goods 4000 | opens | can open with its own key; door state mirrored | ok | |
 | Cainhurst Summons letter | 12410510 (clinic), lot 2410990 flag 52410990, `2003[4]` | award | captured award -> shared | ok | |
 | Blood Gem Workshop Tool | lot 2411000 (treasure) | picks up | was per player | minor | F2 |
+| Iosefka's Blood Vial (real Iosefka, clinic door) | t241313 -> 72410310 (common 9100 slot 1, lot 23000, ledger 5), gated by 72410301 (npc_quest, shared; cleared by 12410736 at an own-world clinic load) | talk: own vial, C3 to the guests | talk: own vial + gift_up, the host's world awards it, C3 to every member | ok (0.7.3) | items.md 10.8 |
 | Fake Iosefka gifts | t241314 -> 9047-9053 (common 9040 slots 7-13, ledger lots) | | same as Djura | ok (P1 fixed, live with Eileen) | P1 |
 | Gilbert (window) | t241319 -> 9066 Flamesprayer (lot 29000, ledger 23) | | same as Djura | ok (P1 fixed, live with Eileen) | P1 |
 | Gascoigne's daughter | t241320 -> 9067 Tiny Music Box (lot 30000, ledger 24); Red Messenger Ribbon / brooch (12410713, lots 2410910/2410920) | | window talk works (D8) | ok (P1 fixed, live with Eileen) | P1 |
@@ -352,7 +353,8 @@ major / minor / ok; **fix** = done here (F#), proposal (P#, list at the end) or 
 | Event | ids | Host | Guest | Risk | Fix |
 |---|---|---|---|---|---|
 | Doll level-up | 12100112-12100118, 72100100-72100113 never_sync (playtest 1) | | per player | ok | |
-| Messenger gifts | Old Hunter Bell 10050 (own grant), Beckoning / Small Resonant Bell 10010 / 10000 | | own grant | ok | |
+| Messenger gifts | Old Hunter Bell 10050 (replayed from the host since 0.7.3, flag 6670 per player; a guest's talk 12101027 goes up and the host's world awards it), Beckoning Bell 10010 (director grant), Notebook 10000 | | C3 / own grant | ok | items.md 10.8 |
+| Starting weapons | messengers 12101020 / 12101021 (never_sync since 0.7.3), stock flags 72101000-72101002 / 72101010-72101011 (per player) | own pick | own pick in its own Dream (a summoned guest cannot pick in the host's Dream) | ok (0.7.3) | items.md 10.8 |
 | Eye of a Blood-drunk Hunter | 12101028 (chr type 0, night 9801, DLC flag), lot 10040 flag 50000100 | gets it | never for a guest | minor | F3 |
 | Badge shops / workshop tools | 12101000 (badges held), 12100450 (tools held) | | own inventory | ok | F2 for the tools |
 | Tear Stone | 12100123 lot 14000 (ledger 0) | | ledger | ok | |
