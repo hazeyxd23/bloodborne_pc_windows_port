@@ -66,8 +66,8 @@ Host and guest at the Tomb of Oedon with Eileen's state 1363 (default test save,
 
 ## 3. The rule and what it does
 
-`party_npc_fights` (the host's; System > Shared world *NPC hunters fight all*, the launcher's Party
-Rules & Sync *NPC hunters fight the whole party*, bbport.ini `party_npc_fights`,
+`party_npc_fights` (the host's; System > Party rules: World *NPC hunters fight all*, the launcher's Party
+Rules tab *NPC hunters fight the whole party*, bbport.ini `party_npc_fights`,
 `BB_PARTY_NPC_FIGHTS` at start; default on; guests follow the host's, sent with the `balance` rules).
 
 - **Guest copies of the host-only transitions** (`kGuestRuns`, the EMEVD dispatch filter's second
