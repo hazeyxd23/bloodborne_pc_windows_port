@@ -7,8 +7,25 @@
 // Categories: boss_defeated boss_area lamp_unlocked shortcut_door npc_quest
 // item_lot_picked key_event cutscene_seen world_state session_runtime never_sync
 // time_of_day (9800-9802: applied only through the cutscene replay path, never silently).
+// covenant_outcome (per player while the host's rule is on; else the next row's category).
 // Ids no row covers: treat as never_sync.
-// ---- 83 override rows (area gates, endings, cutscene/time-of-day flags)
+// ---- 15 covenant outcome rows (per player: Annalise, Alfred, Valtr)
+{1040u, 1059u, Category::covenant_outcome, "Annalise (Vilebloods): alive / hostile / the flesh"},
+{1340u, 1359u, Category::covenant_outcome, "Alfred: the Cainhurst quest (in the castle, the queen's death, hostile, dead)"},
+{1790u, 1809u, Category::covenant_outcome, "Valtr (the League): talk states, successor, hostile, dead"},
+{9770u, 9770u, Category::covenant_outcome, "Alfred moved out of Cainhurst (common 9770)"},
+{12400590u, 12400595u, Category::covenant_outcome, "Alfred's events (m24_00): init, invitation, hostile, death"},
+{12420500u, 12420500u, Category::covenant_outcome, "Annalise's revival with the Queenly Flesh (m24_02, remo 24020000)"},
+{12500010u, 12500021u, Category::covenant_outcome, "Annalise's events (m25): init, kneel, blood, damage, the flesh"},
+{12500050u, 12500054u, Category::covenant_outcome, "Alfred's events (m25): init, talked to, hostile, death"},
+{12700901u, 12700901u, Category::covenant_outcome, "Valtr's init (m27)"},
+{12700903u, 12700905u, Category::covenant_outcome, "Valtr's death / attack count / hostile (m27)"},
+{12700910u, 12700910u, Category::covenant_outcome, "the League after Valtr's death (m27)"},
+{72400460u, 72400479u, Category::covenant_outcome, "Alfred's talk block (m24 T7)"},
+{72500300u, 72500339u, Category::covenant_outcome, "Annalise's talk / kneel / blood / revival block (m25 T7)"},
+{72500350u, 72500359u, Category::covenant_outcome, "Alfred in Cainhurst (m25 T7)"},
+{72700300u, 72700339u, Category::covenant_outcome, "Valtr's talk block, rune / staff triggers (m27 T7)"},
+// ---- 84 override rows (area gates, endings, cutscene/time-of-day flags)
 {2100u, 2100u, Category::never_sync, "area gate (TBL1 0x47304B0: ON blocks the host bell / summons in the area)"},
 {2200u, 2200u, Category::never_sync, "area gate (TBL1 0x47304B0: ON blocks the host bell / summons in the area)"},
 {2300u, 2300u, Category::never_sync, "area gate (TBL1 0x47304B0: ON blocks the host bell / summons in the area)"},

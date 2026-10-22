@@ -35,9 +35,21 @@ std::int32_t RepeatGiftLot(std::uint32_t trigger) {
     }
 }
 
+std::int32_t OwnTalkGiftLot(std::uint32_t trigger) {
+    // m27 event 12700906 (`DLC_NPCアイテム入手XX`, slots 0 / 1): trigger flag + the lot's personal flag.
+    switch (trigger) {
+    case 72700321u: return 43120;  // Valtr: the Impurity rune (GemGen 200030, flag 6676)
+    case 72700322u: return 43130;  // Valtr: the League Staff (goods 131, flag 6678)
+    default: return -1;
+    }
+}
+
 bool WorldActionAllowed(std::uint32_t id, bool clear, std::uint32_t host_map) {
     if (RepeatGiftLot(id) > 0) {
         return false;  // P2: the guest's own gift (its own grant), never the host's 9100
+    }
+    if (OwnTalkGiftLot(id) > 0) {
+        return false;  // 0.7.3: the guest's own gift; the host's 12700906 would give it to the host
     }
     const int key = progress::PoolKeyOfId(id);
     if (key < 0 || !progress::WorldMirrorKey(key) || progress::NeverWritable(id) ||
@@ -47,7 +59,9 @@ bool WorldActionAllowed(std::uint32_t id, bool clear, std::uint32_t host_map) {
     if (NpcGiftTrigger(id)) {
         return !clear;  // set only: the host's own 9040 awards the gift once (P1)
     }
-    const Category c = progress::CategoryOf(id);
+    // 0.7.3: covenant outcomes are per player while the host's rule is on (the host's world keeps
+    // its own; the guest's change stays in its overlay). Off: the base category, as before.
+    const Category c = progress::EffectiveCategory(id, progress::CovenantPerPlayer());
     // Elevator / two-state object flags (C2's state ids, e.g. 12410350/351 Central Yharnam's lift):
     // the lift's own network-synced events and the replicated ObjAct kick move it on the host; a
     // guest's value, arriving later, would fight the host's ride. A lift ride the host's game did
@@ -678,6 +692,7 @@ std::atomic<double> g_pickup_at{-1e9};     // Now() of the last one
 std::mutex g_gift_mu;
 std::vector<std::uint32_t> g_gift_sets;
 std::vector<std::uint32_t> g_repeat_sets;  // P2: repeatable gift triggers (RepeatGiftLot) this game set
+std::vector<std::uint32_t> g_own_sets;     // 0.7.3: own talk gift triggers (OwnTalkGiftLot) this game set
 std::mutex g_kick_mu;
 std::vector<std::int32_t> g_kicks_out;
 std::atomic<std::uint32_t> g_keygate_own{0};  // guest: a key-item gate it opened (own save, GuestTick)
@@ -702,6 +717,13 @@ void OnLocalGiftSet(std::uint32_t id) {
         }
         return;
     }
+    if (OwnTalkGiftLot(id) > 0) {
+        std::lock_guard<std::mutex> lk(g_gift_mu);
+        if (g_own_sets.size() < 16 && std::find(g_own_sets.begin(), g_own_sets.end(), id) == g_own_sets.end()) {
+            g_own_sets.push_back(id);
+        }
+        return;
+    }
     if (!NpcGiftTrigger(id)) {
         return;
     }
@@ -720,6 +742,12 @@ std::vector<std::uint32_t> TakeRepeatSets() {
     std::lock_guard<std::mutex> lk(g_gift_mu);
     std::vector<std::uint32_t> out;
     out.swap(g_repeat_sets);
+    return out;
+}
+std::vector<std::uint32_t> TakeOwnSets() {
+    std::lock_guard<std::mutex> lk(g_gift_mu);
+    std::vector<std::uint32_t> out;
+    out.swap(g_own_sets);
     return out;
 }
 std::mutex g_treasure_mu;
@@ -900,6 +928,7 @@ void GuestTick(const GameSnapshot& s, party::PartyLink* link) {
         }
         if (s.session_role != 6) {
             TakeRepeatSets();  // its own world: its own 9100 awards them
+            TakeOwnSets();     // its own world: its own 12700906 awards them
         }
         return;
     }
@@ -979,6 +1008,23 @@ void GuestTick(const GameSnapshot& s, party::PartyLink* link) {
         Log("guest: repeatable NPC gift trigger %u set by its talk in the host's world: lot %d %s; trigger %s "
             "(common 9100 does that on the host only)", id, lot,
             queued ? "given to this guest (own grant)" : "NOT queued (items off)", cleared ? "cleared" : "NOT cleared");
+    }
+    for (std::uint32_t id : TakeOwnSets()) {
+        // 0.7.3: Valtr's rune / staff. Joining the League is this player's own (covenant outcomes are
+        // per player), and so is the item: its own grant with the lot's personal flag (6676 / 6678 stay
+        // in the own pool while summoned), never the host's. The trigger stays in the overlay.
+        const std::int32_t lot = OwnTalkGiftLot(id);
+        const std::int32_t flag = ItemLotFlag(lot);
+        bool have = false;
+        if (flag > 0 && progress::ReadFlagOwnSave(static_cast<std::uint32_t>(flag), &have) && have) {
+            Log("guest: own talk gift trigger %u set by its talk in the host's world: lot %d already given (own flag "
+                "%d set); nothing given", id, lot, flag);
+            continue;
+        }
+        const bool queued = OfferOwnGift(lot);
+        Log("guest: own talk gift trigger %u set by its talk in the host's world: lot %d (flag %d) %s (m27 event "
+            "12700906 awards it in the own world only)", id, lot, flag,
+            queued ? "given to this guest (own grant)" : "NOT queued (items off or already queued)");
     }
     if (const std::uint32_t kgf = g_keygate_own.exchange(0)) {
         const bool ok = progress::WriteFlagOwnSave(kgf, true);
