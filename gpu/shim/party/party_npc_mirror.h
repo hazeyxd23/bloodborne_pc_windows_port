@@ -22,7 +22,7 @@
 // "warp OBJ talk CHR"s (AAB0950+n): the host's game keeps an unlit lamp's talk chr off, so a guest
 // at that lamp lost its talk (t241001 "Light lamp") and could not light it (live lamprule run 3:
 // NPC 2410951 turned off 0.1 s after the guest reached Central Yharnam's lamp, no prompt since).
-// The host's rule (System > Shared world, party_npc_mirror; BB_PARTY_NPC_MIRROR=0/1 at start). Pure parts here (unit test tests/test_party_npc_mirror.cpp).
+// The host's rule (System > Party rules: World, party_npc_mirror; BB_PARTY_NPC_MIRROR=0/1 at start). Pure parts here (unit test tests/test_party_npc_mirror.cpp).
 #pragma once
 
 #include <algorithm>

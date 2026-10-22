@@ -1091,7 +1091,7 @@ NpcMirrorState& NM() {
 }
 
 void NpcMirrorTick(const GameSnapshot& s, party::PartyLink* link, bool host) {
-    // The host's rule (System > Shared world, bbport.ini party_npc_mirror, BB_PARTY_NPC_MIRROR at
+    // The host's rule (System > Party rules: World, bbport.ini party_npc_mirror, BB_PARTY_NPC_MIRROR at
     // start): the host's own setting, a guest follows the host's (party_balance Rules). Live.
     const bool on = host ? BbSettings::Get().party_npc_mirror.load()
                          : party::status::HostRuleOn(party::status::HostRule::NpcMirror);
