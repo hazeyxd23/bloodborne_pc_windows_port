@@ -747,8 +747,10 @@ Rules FromSettings() {
     r.host_limbo_revive = v.party_host_limbo_revive;
     r.kill_record = v.party_kill_record;
     r.npc_mirror = v.party_npc_mirror;
+    r.npc_fights = v.party_npc_fights;
     r.gather = v.party_gather;
     r.covenant_per_player = v.party_covenant_per_player;
+    r.travel_vote = v.party_travel_vote;
     r.rot_cleanse_boss = v.party_rot_cleanse_boss;
     r.rot_cleanse_killer = v.party_rot_cleanse_killer;
     r.rot_cleanse_echoes = v.party_rot_cleanse_echoes;
@@ -1008,7 +1010,7 @@ void EnemyHpTestTick(const GameSnapshot& s) {
 /// Test aid (BB_PARTY_CHR_DUMP=R, prologue NPC check): every non-player chr within R m (default
 /// 40) of the local player - entity id (+0x1F0), handle, team, HP, position, disabled / draw bits -
 /// once the world has stood 4 s, again whenever that set changes (a chr enabled, disabled, killed,
-/// added): the host's and a guest's lists side by side show a chr only one game has.
+/// added, hurt): the host's and a guest's lists side by side show a chr only one game has.
 void ChrDumpTick(const GameSnapshot& s) {
     static const float radius = [] {
         const char* v = std::getenv("BB_PARTY_CHR_DUMP");
@@ -1047,13 +1049,16 @@ void ChrDumpTick(const GameSnapshot& s) {
             const u64 dm = Field<u64>(Field<u64>(chr, 0x3b0), 0x20);
             const int entity = Field<int>(chr, 0x1f0, -1), hp = Field<int>(dm, 0xf8, -1);
             const bool off = (Field<u8>(Field<u64>(chr, 0x18), 0x20) & 1) || (Field<std::uint16_t>(Field<u64>(chr, 0x58), 0x114) & 0x40);
-            char b[200];
-            std::snprintf(b, sizeof b, "entity %d chr %x team %d HP %d/%d at (%.1f, %.1f, %.1f) %.1f m%s", entity,
-                          Field<u32>(chr, 8, ~0u), npc ? int(Field<u8>(npc, 0x12f, 0xff)) : -1, hp, Field<int>(dm, 0xfc, -1),
+            char b[240];
+            // team: the live one (ChrIns +0x88, EMEVD 2004[2] changes it; pvp.md), row: the NpcParam's
+            std::snprintf(b, sizeof b, "entity %d chr %x team %d (row %d) type %d HP %d/%d at (%.1f, %.1f, %.1f) %.1f m%s",
+                          entity, Field<u32>(chr, 8, ~0u), Field<int>(chr, 0x88, -1),
+                          npc ? int(Field<u8>(npc, 0x12f, 0xff)) : -1, Field<int>(chr, 0x78, -1), hp, Field<int>(dm, 0xfc, -1),
                           double(p[0]), double(p[1]), double(p[2]), double(d), off ? " DISABLED" : "");
             lines.push_back(b);
             char k[48];
-            std::snprintf(k, sizeof k, "%d/%d/%d;", entity, hp > 0 ? 1 : 0, off ? 1 : 0);
+            // HP too (D11: an NPC hunter's HP on every game during a fight), at most one dump a second
+            std::snprintf(k, sizeof k, "%d/%d/%d;", entity, hp, off ? 1 : 0);
             sig += k;
         }
     }
@@ -1292,8 +1297,10 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::HostLimboRevive, r.host_limbo_revive);
     party::status::SetHostRule(party::status::HostRule::KillRecord, r.kill_record);
     party::status::SetHostRule(party::status::HostRule::NpcMirror, r.npc_mirror);
+    party::status::SetHostRule(party::status::HostRule::NpcFights, r.npc_fights);
     party::status::SetHostRule(party::status::HostRule::Gather, r.gather);
     party::status::SetHostRule(party::status::HostRule::CovenantPerPlayer, r.covenant_per_player);
+    party::status::SetHostRule(party::status::HostRule::TravelVote, r.travel_vote);
     party::status::SetHostRule(party::status::HostRule::RotCleanseBoss, r.rot_cleanse_boss);
     party::status::SetHostRule(party::status::HostRule::RotCleanseKiller, r.rot_cleanse_killer);
     party::status::SetHostRule(party::status::HostRule::RotCleanseEchoes, r.rot_cleanse_echoes);
