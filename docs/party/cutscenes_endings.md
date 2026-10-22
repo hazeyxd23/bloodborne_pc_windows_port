@@ -376,7 +376,7 @@ out; no need for goods 4311 on guests. Expect the m34 multiplayer wall (13400010
 |---|---|---|
 | m24_01 12410000 char-make (mode 8) | 24010005/24011005 | none (each player has their own) |
 | m21 9401 first death | 21000000 | 12417810 |
-| common 9422 first kidnap | 28000010 | 9423, SpEffect 4680 |
+| common 9422 first kidnap | 28000010 | 9423, SpEffect 4680 (every member sees the scene since 0.7.3, whoever was grabbed) |
 | m22 12200130/12200131 carriage | 22000030, 22000040 | warp 2502959 (Cainhurst) — TRAVEL |
 | m26 12600026 brain shutdown | 26000040 (mode 2 in MP) | flags of that event |
 | m28 12800431 Lecture Building grab | 28000040/28001040 | 12800434, warp 3202958 — TRAVEL |
