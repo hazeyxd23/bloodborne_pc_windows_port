@@ -2647,7 +2647,7 @@ SummonedResult ApplySummoned(const ItemGrant& g) {
         // dropped copy.
         const bool usable = !SummonedKeyGiveNow(slots);
         const bool view = SummonedKeyViewActive();
-        // With the view: System > Party rewards "Key items at once" (bbport.ini
+        // With the view: System > My party: Rewards "Key items at once" (bbport.ini
         // party_key_items_summoned; BB_PARTY_KEY_ITEMS_SUMMONED at start), live. Without: only an
         // explicit BB_PARTY_KEY_ITEMS_SUMMONED=1 (the setting's default on means nothing there).
         const bool now = SummonedKeyGiveNowRule(
@@ -2807,7 +2807,7 @@ void BB_COOP_SYSV KeyViewHook(u64 container, u32 summoned) {
 }
 
 void InstallKeyView() {
-    // System > Party rewards "Own key items as guest" (bbport.ini party_key_view; BB_PARTY_KEY_VIEW
+    // System > My party: Rewards "Own key items as guest" (bbport.ini party_key_view; BB_PARTY_KEY_VIEW
     // at start): read here once, next start.
     if (!KeyViewOn(BbSettings::Get().party_key_view.load() ? "1" : "0")) {
         Log("own key items as guest off (party_key_view / BB_PARTY_KEY_VIEW=0): the game's summoned key "
