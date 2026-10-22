@@ -134,6 +134,7 @@ struct TickState {
     bool loaded = false;
     Clock::time_point next_params{}, next_enemies{}, next_send{}, last_death{};
     std::string last_sent;
+    int last_members = 0;  // the host's connected guests at the last send
     int last_n = 0;
     u64 last_player = 0;
     int last_hp = -1;
@@ -1307,6 +1308,11 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::RotCleanseBoss, r.rot_cleanse_boss);
     party::status::SetHostRule(party::status::HostRule::RotCleanseKiller, r.rot_cleanse_killer);
     party::status::SetHostRule(party::status::HostRule::RotCleanseEchoes, r.rot_cleanse_echoes);
+    {   // D7 for the menus' read-only lines on a guest (the host's values once they came).
+        const int scaling[party::status::kScalingValues] = {r.boss_hp,  r.boss_damage,  r.boss_poise,
+                                                            r.enemy_hp, r.enemy_damage, r.enemy_poise};
+        party::status::SetHostScaling(scaling);
+    }
     {   // The rot for System > Party and the party HUD (none while it is off).
         int kinds[party::status::kRotKinds] = {};
         for (int k = 0; k < kRotKinds && k < party::status::kRotKinds; ++k) kinds[k] = r.rot ? g_kind[k].load() : 0;
@@ -1316,10 +1322,17 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
         std::lock_guard<std::mutex> lk(g_mu);
         g_have_host = false;  // a host's own settings count
     }
-    // The host's rules to the party (on change, and every 15 s for late joiners).
+    // The host's rules to the party (on change, at once when a guest connects, and every 15 s):
+    // a guest's game follows them, never its own bbport.ini values (guestrules, 0.7.3).
     if (host && link) {
         const std::string j = ToJson(r);
-        if (j != st.last_sent || now >= st.next_send) {
+        int members = 0;
+        for (const party::RosterEntry& e : link->roster()) {
+            if (e.slot != 0 && e.connected) ++members;
+        }
+        const bool joined = members > st.last_members;
+        st.last_members = members;
+        if (j != st.last_sent || joined || now >= st.next_send) {
             link->post_event(party::kBroadcast, kEventName, j);
             if (j != st.last_sent) Log("rules sent to the party: %s", j.c_str());
             st.last_sent = j;
