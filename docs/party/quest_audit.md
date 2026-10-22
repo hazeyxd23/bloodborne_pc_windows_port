@@ -271,7 +271,7 @@ major / minor / ok; **fix** = done here (F#), proposal (P#, list at the end) or 
 | Lifts / gate | lift 12700130-132 (12700134/135), lift 12700140-142 (12700144/145), gate 12700170-172 + 12705490 (12700173/174) | | mirrored, State | minor | |
 | Snatchers | 1270501 (spawn), 12700500 (kidnap, chr type 0) | | | major | F1 |
 | Shadows of Yharnam | defeat 12701800 (2700/2701 never_sync, 9463), host entry 12701802 (no remo); lots 2700990 (flag 52700950), 2700995 | fight | first fight: host region or a guest's fog (P5); re-fights: B2; captured award (map flag) -> shared | ok | P5 |
-| Valtr / League (t270503, 6500), beggar 504030 (t270217, ghost), old man 6100 (t270317 -> 9058 Pungent Blood Cocktail) | | | gifts as Djura; beggar solid since P3 | ok | P1, P3 |
+| Valtr / League (t270503, 6500), beggar 504030 (t270217, ghost), old man 6100 (t270317 -> 9058 Pungent Blood Cocktail) | Valtr: state 1790-1809, m27 12700901-12700910, T7 72700300-72700339 (covenant_outcome, 0.7.3); Impurity rune 43120 / League Staff 43130 by m27 12700906 (triggers 72700321 / 72700322, personal flags 6676 / 6678) | talk, award | Valtr's quest per player (rule *Covenants per player*); the rune / staff: the guest's own grant (worldact OwnTalkGiftLot, items OfferOwnGift), never a world action; old man gifts as Djura; beggar solid since P3 | ok (0.7.3) | P1, P3 |
 | NPC summons (Henryk, executioner) | 12704400-12704431 | | | minor | none |
 
 ### Byrgenwerth, Lecture Building, Moonside Lake (m32_00)
@@ -311,7 +311,7 @@ major / minor / ok; **fix** = done here (F#), proposal (P#, list at the end) or 
 | Lift to Ebrietas | 12420150-12420156 (State 12420154/155) | | mirrored | minor | |
 | Celestial Emissary | defeat 12421700 (2420), entry 12421702 (no remo); lots 25700000 / 25700005 (ledger 33/34) | | guest fog first | ok | |
 | Ebrietas | defeat 12421800 (2421, 9459), entry 12421802 (no remo); lot 80000300 Great Isz Chalice flag 5009 | | shared | ok | |
-| Queen Annalise revival | 12420500 (removes goods 4305 Queenly Flesh, remo 24020000) | | | minor | |
+| Queen Annalise revival | 12420500 (removes goods 4305 Queenly Flesh, remo 24020000) | | covenant_outcome (0.7.3): per player, with Annalise's state 1040-1059 and 72500300-72500339 | minor | |
 | Insight check | 12425290 (host only, >= 10) | | | ok | |
 | Cosmic Eye Watcher Badge | lots 2420270 / 2420280 (treasure, per player) | | per player | ok | |
 
@@ -324,7 +324,7 @@ major / minor / ok; **fix** = done here (F#), proposal (P#, list at the end) or 
 | Martyr Logarius | defeat 12501800 (2500, 9460), host entry 12501802 remo 25000020 | intro + fight | either goes in first (P5, region visit) | ok | P5 |
 | Unopened Summons | 12500600 lot 2500910 flag 52500910 (award) | | shared | ok | |
 | Queenly Flesh | 12500020, lot 2500920 | | | ok | |
-| Annalise / Yurie / Alfred | 6040 (t250307 -> 9042 lot 17000 Cainhurst Badge), 6150 (t250324) | | solid; gifts as Djura | ok (P1 fixed, live with Eileen) | P1 |
+| Annalise / Yurie / Alfred | 6040 (t250307 -> 9042 lot 17000 Cainhurst Badge), 6150 (t250324) | | solid; gifts as Djura; Annalise 1040-1059 / m25 12500010-12500021, Alfred 1340-1359 / 12400590-12400595 / 12500050-12500054 / 72400460-72400479 / 72500350-72500359 / 9770 are covenant_outcome (0.7.3): Alfred's kill of the queen stays in the world it happened in | ok (P1 fixed, live with Eileen) | P1 |
 | Church marks | 12500206 / 12500220 (world_state toggles) | | | minor | |
 
 ### Nightmare Frontier (m33_00)
