@@ -78,6 +78,15 @@ Rules & Sync *NPC hunters fight the whole party*, bbport.ini `party_npc_fights`,
   (`2003[2/9/17/22/31/32/41]`, `2000[5]`) are skipped: the host's copy writes them and C2 brings
   them into the guest's save, so no progress is written twice and no covenant outcome is written
   from here. On the host, solo or with the rule off, the gate's argument is the data's own again.
+- **A foe a phantom can hit** (`kGuestFoeTeam`, `TeamFor`): the hostile team 27 is no enemy for a
+  cooperator. In the relation table (`0x5127B90`, lock-on) and the SpEffect target table
+  (`0x4731560`, an attack's effects) row 19 (the host's body) has 1 at column 27, row 20 (a white
+  phantom) has 0 in both (read from the 1.09 ELF); team 23 (the map enemies, Henryk) has 1 in both
+  rows. Live nfa run 2: with 27 on its game the guest pressed R3 three times at 0.9 m (no lock-on)
+  and its eight R1 left Alfred at 3031. So every `2004[2]` team 27 of a listed event and of the inits
+  that run on every game (`kTeamEvents`: 12400650, 12700901, 13400950) becomes 23 in a guest's copy
+  (its game only: the host's game keeps 27, its AI and events; another team in the data, e.g.
+  Valtr's 8, is untouched); every other dispatch writes the data's 27 back.
 - **Assassins** (`kAssassins`): a guest shows Brador / the Hamlet assassin (drops SpEffect 5560,
   adds 8060, clears its invincibility) while the host-world flag its appear event sets is on, and
   hides it again when the host's forced return clears it. **Not verified live** (the fixture needs
@@ -94,13 +103,39 @@ Rules & Sync *NPC hunters fight the whole party*, bbport.ini `party_npc_fights`,
 | Alfred hostile, Cainhurst (state 1349; run 10 from the first lamp 2502950, read from the chr dumps at ~290 m) | host team 27, **guest team 26** (friendly: no lock-on, no hits; runs 5-10) | after a load the guest's copy of 12500050 passes its `1003[6]`: team 27 on the guest too (`guest copy of event 12500050 runs as the host's`, runs 4-10; run 10 17/17, the smoke as committed) |
 | Blood-drunk Eileen, Grand Cathedral (1374 + 9802) | the guest that arrives after the host already gets her through the init event (12400650 label 1, no gate): team 27 on both (run 8) | same; the gate matters for a transition while the guest stands in the map. Her death from the guest's blow reached the host (1368, 1705) and the guest's own save (`1368=1/1`, run 8) |
 
+### Alfred in the Queen's Chamber (smoke phase `nfa`, agents/nfproof/smoke/run1-run3, 2026-10-22)
+
+The void at the Queen's Chamber lamp (2502951) was the fixture: event 12500810 (the Crown of
+Illusions reveal) disables the chamber's map parts 2506000-2506017 / 2506070-2506073, objects and hit
+parts 2506037 / 2506038 until its own flag is on. `nfa` sets 12500810 (and 12500000, the carriage
+arrival scene; Logarius dead 12501800/02/03; Alfred's talk flags 72500350-72500359 cleared, else
+12500051 moves him to 1351): the chamber draws on both games, Alfred stands at y 130.
+
+Run 3 (22/22, the smoke as committed), Alfred friendly (1348) in both saves:
+
+| Step | Host | Guest |
+|---|---|---|
+| Before | team 26 | team 26; R3 at 2 m: no lock-on |
+| The host's 3 R1 (the guest 2 m from him) | 3100 -> 3031, 12500053: 1349, team 27 at +56.5 s | its copy of 12500053 (gate passed) fires at +56.5 s with the host's flag: `team 27 -> 23` (a foe), team 23 at +57.4 s |
+| The guest locks on, 8 R1 | HP 3031 -> 3020 -> 3009 -> ... -> 2941 (11 per hit) | the same HP; lock-on 1; damage number 11 on screen |
+| The guest's HP 0 (`guest_kill :hp`) at +82.4 s | death 5 s later: 1350, 12500054, drop roll, Echoes 0 -> 5250 at +87.5 s | Echoes 0 -> 5250, the same drop roll seed |
+| The guest's next load | | `1348=1/0 1349=0/0 1350=0/1`: Alfred's states are covenant outcomes, its own save keeps 1348 (per player) |
+
+Runs 1-2 (before the team fix): the in-map switch worked the same (team 27 on the guest 0.6-0.9 s
+after the host's), but the guest never locked on and its R1 did nothing (run 2: HP 3031 unchanged).
+A HP written by the test aids (`:hp85`, `guest_kill :hp` on an unhittable chr) drifted 30 per second
+on both games afterwards; with real hits (run 3) there was no drift.
+
+Seen in run 3 (not D11): on the host's screen Alfred stands ~5 s after the guest's killing blow
+(the guest's game plays his death at once; the Tomb fight shows the same ~5 s), and his death line
+shows as "[Hunter1 talking to Alfred]" on the host (the shared NPC talk takes the death line for a
+conversation).
+
 Not verified live:
-- a guest's **hits** on a hunter whose team the rule fixed: from the Queen's Chamber lamp (2502951)
-  both players and Alfred fell through an undrawn void in this test save (runs 7, 9; also with the rule
-  off, so not this change) and the blood-drunk Eileen stood idle
-  (no lock-on on either game); the Tomb fight shows the damage path itself works for a hostile NPC
-  chr (team 23);
-- the mid-session transitions (12400593, 12400656, 12500053, 12700905, 13400920, 13500920) firing
-  while the guest stands next to the NPC; the rewrite is the same as the init's (12500050), which was;
+- a guest's real killing blow (run 3 used `guest_kill :hp`, the HP 0 a lethal hit leaves; 8 real R1
+  did 11 each against 3100 HP);
+- the mid-session transitions other than 12500053 (12400593, 12400656, 12700905, 13400920, 13500920)
+  firing while the guest stands next to the NPC; the rewrite is the same;
+- the team 23 switch on the other hunters (only Alfred in Cainhurst was fought);
 - the assassins (Brador, the Fishing Hamlet), Valtr, Djura, the DLC hunters;
 - AI-player summons (Bell signs, the Chalice invader) with a full party.

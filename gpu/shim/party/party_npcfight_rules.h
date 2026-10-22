@@ -101,12 +101,50 @@ enum class Act : std::uint8_t {
     pass_gate,     ///< write the guest's value into the gate's argument (chr type / no state)
     restore_gate,  ///< write the data's own value back (the host, solo, the rule off)
     skip,          ///< skip the instruction (a guest copy's progress write)
+    foe_team,      ///< 2004[2] team 27 -> kGuestFoeTeam (a guest's copy: a foe a phantom can hit)
+    restore_team,  ///< 2004[2] kGuestFoeTeam -> 27 again (the host, solo, the rule off)
 };
+
+// ---- the hostile team on a guest's game ----
+//
+// An NPC hunter turned hostile gets team 27 (2004[2], every listed event's data). In the game's
+// two team tables (pvp.md: the relation table 0x5127B90, lock-on / nearest enemy; the SpEffect
+// target table 0x4731560, an attack's effects), row 19 (the host's body) has 1 at column 27 but
+// row 20 (a cooperator, white phantom) has 0 in both: a guest cannot lock on to a team-27 chr nor
+// hurt it (live nfa run 2: three R3 at 0.9 m, no lock-on; eight R1, Alfred's HP unchanged). Team 23
+// (the map enemies, Henryk's MSB team) has 1 in rows 19 and 20 of both tables, so a guest's copy
+// switches the chr to 23 instead: on its game only (the host's game keeps 27, its AI and its
+// events); the HP, the death and the kill flags stay the host's (the Tomb fight's path).
+constexpr std::uint8_t kHostileTeam = 27;
+constexpr std::uint8_t kGuestFoeTeam = 23;
+constexpr std::int32_t kTeamArg = 4;  ///< 2004[2]: i32 entity @0, u8 team @4
+
+/// Events that switch an NPC hunter to team 27 on every game (no host-only gate; a guest's copy
+/// runs them as data): the blood-drunk Eileen at a load (12400650), Valtr's (12700901) and the
+/// Hunter's Nightmare hunters' (13400950) inits. Together with kGuestRuns their 27 becomes 23 on a
+/// guest.
+inline constexpr std::int32_t kTeamEvents[] = {12400650, 12700901, 13400950};
+
+inline bool TeamEvent(std::int32_t event) {
+    if (GuestRunFor(event)) return true;
+    for (std::int32_t e : kTeamEvents)
+        if (e == event) return true;
+    return false;
+}
+
+/// The team byte a 2004[2] of a TeamEvent gets for `act` when it holds `have`; `have` itself when
+/// nothing changes (another team in the data, e.g. Valtr's friendly 8, is never touched).
+constexpr std::uint8_t TeamFor(Act act, std::uint8_t have) {
+    return act == Act::foe_team && have == kHostileTeam        ? kGuestFoeTeam
+           : act == Act::restore_team && have == kGuestFoeTeam ? kHostileTeam
+                                                                : have;
+}
 
 /// What the dispatch filter does with instruction (event, index, bank, id). `client`: this game is
 /// a guest in the host's world (session role 6); `rule_on`: the host's rule in force.
 inline Act Decide(std::int32_t event, std::int32_t index, std::int32_t bank, std::int32_t id, bool client,
                   bool rule_on) {
+    if (bank == 2004 && id == 2 && TeamEvent(event)) return client && rule_on ? Act::foe_team : Act::restore_team;
     const GuestRun* g = GuestRunFor(event);
     if (!g) return Act::none;
     const bool gate = index == g->index && ((g->gate == Gate::ChrTypeHost && bank == 4 && id == 3) ||
