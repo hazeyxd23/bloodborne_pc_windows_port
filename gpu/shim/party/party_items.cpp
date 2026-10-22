@@ -281,6 +281,10 @@ bool MessengerGiftLot(std::int32_t lot) {
     return lot == 10000 || lot == 10010 || lot == 10050;
 }
 
+bool OwnTalkGiftLotId(std::int32_t lot) {
+    return lot == 43120 || lot == 43130;
+}
+
 bool RepeatGiftLotId(std::int32_t lot) {
     return lot == 17010 || lot == 23000 || lot == 24060 || lot == 28000 || lot == 32020;
 }
@@ -3471,6 +3475,27 @@ bool OfferRepeatGift(std::int32_t lot) {
     }
     Log("guest's own repeatable gift lot %d (#%llu this session): %s", lot, static_cast<unsigned long long>(n),
         taken ? "queued (given while summoned, or at home)" : "queue full");
+    return taken != 0;
+}
+
+bool OfferOwnGift(std::int32_t lot) {
+    if (!g_on.load() || EnvOff("BB_PARTY_ITEMS") || !OwnTalkGiftLotId(lot)) {
+        return false;
+    }
+    ItemGrant g;
+    g.lot = lot;
+    g.flag = ItemLotFlag(lot);
+    g.source = ItemSource::Own;
+    if (g.flag <= 0) {
+        return false;
+    }
+    std::size_t taken = 0;
+    {
+        std::lock_guard<std::mutex> lk(g_guest_mu);
+        taken = g_guest.Offer({g});
+    }
+    Log("guest's own talk gift lot %d (flag %d): %s", lot, g.flag,
+        taken ? "queued (given while summoned, or at home)" : "already queued or given");
     return taken != 0;
 }
 

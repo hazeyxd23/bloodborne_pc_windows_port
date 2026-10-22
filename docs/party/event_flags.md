@@ -225,6 +225,23 @@ Key findings behind the rows:
   misread as "first death cutscene"). **9800-9802** = time of day (9800 evening, 9801 night,
   9802 Blood Moon; written by the cutscene end callback 0x1CECEB0) -> own category
   **time_of_day**, applied only through the cutscene replay path, never by the silent sync.
+- **Covenant outcomes (0.7.3, own category covenant_outcome; user decision 2026-10-22: per
+  player)**: the 15 COVENANT_ROWS of `flag_tool.py` (emitted first, so they win over every other
+  row). Annalise (Vilebloods): state 1040-1059 (1040 on the throne, 1041 hostile, 1042 the flesh -
+  m25 12500010 sets it when Alfred's 1348 says he is in the castle), m25 events 12500010-12500021,
+  m25 T7 72500300-72500339 (damage / kneel counts, 326 revival trigger, 328 revived), the revival
+  12420500 (m24_02, remo 24020000). Alfred: state 1340-1359 (1347 summons handed over, 1348 in the
+  castle, 1341 / 1345 / 1349 hostile, 1342 / 1346 / 1350 dead, 1351), m24_00 12400590-12400595, m25
+  12500050-12500054, m24 T7 72400460-72400479, m25 T7 72500350-72500359, common 9770. Valtr (the
+  League): state 1790-1809 (1790 dead, 1791 successor, 1800 / 1801 / 1792 talk, 1805 hostile;
+  1780-1789 is the Fishing Hamlet priest's), m27 12700901 / 12700903-12700905 / 12700910, m27 T7
+  72700300-72700339 (321 / 322 the rune and League Staff triggers of 12700906). While the host's
+  rule *Covenants per player* is on (default): C2 never writes them into a guest's save, a guest's
+  change of them in the host's world is never a world action, the host-world mirror still shows the
+  host's values in the overlay. Off: the base category (`BaseCategoryOf`: npc_quest, world_state,
+  cutscene_seen). The oath itself is the equipped rune (the player's record), the rune flags
+  9440-9451 and the personal block (6676 / 6678 Valtr's gifts, 6813 League successor) were per
+  player already; the NPCs' item awards stay C3's; Eileen (1360-1379) stays shared.
 - **Session/runtime**: 2000-2099, 7000-7399 and 7600-7699 (common event completions), 9200-9299,
   zones 1AAB5/6/7nnn, restart events. **boss_area** (1AAB4nnn: fight state, fog, NPC summons) is
   not synced live; the vanilla session already carries it.
