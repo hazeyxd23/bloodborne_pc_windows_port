@@ -747,6 +747,7 @@ Rules FromSettings() {
     r.host_limbo_revive = v.party_host_limbo_revive;
     r.kill_record = v.party_kill_record;
     r.npc_mirror = v.party_npc_mirror;
+    r.npc_fights = v.party_npc_fights;
     r.gather = v.party_gather;
     r.rot_cleanse_boss = v.party_rot_cleanse_boss;
     r.rot_cleanse_killer = v.party_rot_cleanse_killer;
@@ -1046,9 +1047,11 @@ void ChrDumpTick(const GameSnapshot& s) {
             const u64 dm = Field<u64>(Field<u64>(chr, 0x3b0), 0x20);
             const int entity = Field<int>(chr, 0x1f0, -1), hp = Field<int>(dm, 0xf8, -1);
             const bool off = (Field<u8>(Field<u64>(chr, 0x18), 0x20) & 1) || (Field<std::uint16_t>(Field<u64>(chr, 0x58), 0x114) & 0x40);
-            char b[200];
-            std::snprintf(b, sizeof b, "entity %d chr %x team %d HP %d/%d at (%.1f, %.1f, %.1f) %.1f m%s", entity,
-                          Field<u32>(chr, 8, ~0u), npc ? int(Field<u8>(npc, 0x12f, 0xff)) : -1, hp, Field<int>(dm, 0xfc, -1),
+            char b[240];
+            // team: the live one (ChrIns +0x88, EMEVD 2004[2] changes it; pvp.md), row: the NpcParam's
+            std::snprintf(b, sizeof b, "entity %d chr %x team %d (row %d) type %d HP %d/%d at (%.1f, %.1f, %.1f) %.1f m%s",
+                          entity, Field<u32>(chr, 8, ~0u), Field<int>(chr, 0x88, -1),
+                          npc ? int(Field<u8>(npc, 0x12f, 0xff)) : -1, Field<int>(chr, 0x78, -1), hp, Field<int>(dm, 0xfc, -1),
                           double(p[0]), double(p[1]), double(p[2]), double(d), off ? " DISABLED" : "");
             lines.push_back(b);
             char k[48];
@@ -1292,6 +1295,7 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::HostLimboRevive, r.host_limbo_revive);
     party::status::SetHostRule(party::status::HostRule::KillRecord, r.kill_record);
     party::status::SetHostRule(party::status::HostRule::NpcMirror, r.npc_mirror);
+    party::status::SetHostRule(party::status::HostRule::NpcFights, r.npc_fights);
     party::status::SetHostRule(party::status::HostRule::Gather, r.gather);
     party::status::SetHostRule(party::status::HostRule::RotCleanseBoss, r.rot_cleanse_boss);
     party::status::SetHostRule(party::status::HostRule::RotCleanseKiller, r.rot_cleanse_killer);
