@@ -2882,7 +2882,42 @@ bool LiftBusyHere(const Lift& l, float radius) {
     return false;
 }
 
+// chalicelamp: the Chalice Dungeon lift cars this game has seen ride (liftrules::ChaliceLiftCar, from
+// the EMEVD dispatch thread); cleared at every load (another layout).
+std::mutex g_chalice_cars_mu;
+std::vector<std::int32_t> g_chalice_cars;
+void NoteChaliceCar(std::int32_t car) {
+    std::lock_guard<std::mutex> lk(g_chalice_cars_mu);
+    if (std::find(g_chalice_cars.begin(), g_chalice_cars.end(), car) != g_chalice_cars.end() ||
+        g_chalice_cars.size() >= 32) {
+        return;
+    }
+    g_chalice_cars.push_back(car);
+    Log("lift: Chalice Dungeon lift car %d seen riding (the on-a-moving-car test and the rider guard know it now)", car);
+}
+std::vector<std::int32_t> ChaliceCars() {
+    std::lock_guard<std::mutex> lk(g_chalice_cars_mu);
+    return g_chalice_cars;
+}
+// A learned dungeon car playing a ride within kLiftCarRadius (horizontally) of `p`: its height in *car_y.
+bool ChaliceCarNear(std::int32_t car, const float p[3], float band, float* car_y) {
+    ObjAnimState st;
+    float at[3];
+    if (!ReadObjAnim(car, &st) || !st.playing || !ObjectPoint(car, 0, 0, at) ||
+        std::hypot(p[0] - at[0], p[2] - at[2]) >= kLiftCarRadius || (band > 0 && std::fabs(p[1] - at[1]) > band)) {
+        return false;
+    }
+    *car_y = at[1];
+    return true;
+}
+
 bool OnMovingLiftCar(const float p[3]) {
+    for (const std::int32_t c : ChaliceCars()) {
+        float y = 0;
+        if (ChaliceCarNear(c, p, liftrules::kChaliceCarBand, &y)) {
+            return true;
+        }
+    }
     for (const Lift& l : Lifts()) {
         ObjAnimState car;
         float at[3];
@@ -2902,13 +2937,37 @@ bool OnMovingLiftCar(const float p[3]) {
 // ride, the local chr's ride bit and position; a drop through the car puts it back on the car.
 void LiftRiderTick(const GameSnapshot& s) {
     static liftrules::RiderTrack track;
+    static std::map<std::int32_t, liftrules::CarRider> car_riders;  // chalicelamp: per learned dungeon car
     static int logged = 0;
     if (!s.world_up || s.loading || !s.player) {
         track = liftrules::RiderTrack{};
+        car_riders.clear();
+        if (s.loading) {
+            std::lock_guard<std::mutex> lk(g_chalice_cars_mu);
+            g_chalice_cars.clear();
+        }
         return;
     }
     float me[4], rot[4];
     if (!LocalChrPose(me, rot)) {
+        return;
+    }
+    for (const std::int32_t c : ChaliceCars()) {
+        float car_y = 0, put[3];
+        const bool near = ChaliceCarNear(c, me, 0.0f, &car_y);
+        liftrules::CarRider& r = car_riders[c];
+        if (liftrules::CarRiderTick(r, near, car_y, me[0], me[1], me[2], put) != liftrules::RiderStep::through) {
+            continue;
+        }
+        alignas(16) float to[4] = {put[0], put[1], put[2], 1.0f};
+        alignas(16) float r16[4] = {rot[0], rot[1], rot[2], rot[3]};
+        const bool ok = b2::LocalChrWarp(s.player, to, r16, "a drop through a Chalice Dungeon lift's car: back on the car");
+        if (logged++ < 32) {
+            Log("lift ride: the local chr dropped through Chalice Dungeon car %d at (%.1f, %.1f, %.1f) (%.1f m under its "
+                "floor); %s (%.1f, %.1f, %.1f)", c, double(me[0]), double(me[1]), double(me[2]),
+                double(put[1] - 0.3f - me[1]), ok ? "put back on the car at" : "NOT put back to", double(put[0]),
+                double(put[1]), double(put[2]));
+        }
         return;
     }
     bool playing = false;
@@ -3161,7 +3220,23 @@ void BusyDeferRewriter(int event_id, int bank, int id, std::uint64_t event, std:
         }
     }
 }
+// chalicelamp: a Chalice Dungeon lift's ride animates its car (2003[18]): the car is learned.
+void ChaliceLiftWatcher(int event_id, int bank, int id, std::uint64_t event, std::uint64_t instr) {
+    if (bank != 2003 || id != 18 || !liftrules::ChaliceLiftEvent(event_id)) {
+        return;
+    }
+    std::uint32_t size = 0;
+    const std::uint64_t args = EmevdInstructionArgs(event, instr, &size);
+    std::int32_t entity = 0;
+    if (!args || size < 4 || !SafeGet(args, &entity)) {
+        return;
+    }
+    if (const std::int32_t car = liftrules::ChaliceLiftCar(event_id, bank, id, entity)) {
+        NoteChaliceCar(car);
+    }
+}
 void WorldactRewriter(int event_id, int bank, int id, std::uint64_t event, std::uint64_t instr) {
+    ChaliceLiftWatcher(event_id, bank, id, event, instr);
     KeyGateRewriter(event_id, bank, id, event, instr);
     LiftEndRewriter(event_id, bank, id, event, instr);
     BusyDeferRewriter(event_id, bank, id, event, instr);
