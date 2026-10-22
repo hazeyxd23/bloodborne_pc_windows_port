@@ -46,14 +46,19 @@ constexpr std::size_t kRowCount = sizeof kRows / sizeof kRows[0];
 const char* const kCategoryNames[kCategoryCount] = {
     "never_sync", "boss_defeated", "boss_area",  "lamp_unlocked", "shortcut_door",  "npc_quest",
     "item_lot_picked", "key_event", "cutscene_seen", "world_state", "session_runtime", "time_of_day",
+    "covenant_outcome",
 };
 
 // First-match table -> disjoint sorted ranges: sweep the row boundaries; on each elementary
-// interval the lowest row index among the covering rows wins.
-std::vector<CategoryRange> BuildRanges() {
+// interval the lowest row index among the covering rows wins. `base`: without the covenant_outcome
+// rows (BaseCategoryOf).
+std::vector<CategoryRange> BuildRanges(bool base = false) {
     std::vector<std::pair<u64, int>> events;  // (position, +row+1 open / -(row+1) close)
     events.reserve(kRowCount * 2);
     for (std::size_t i = 0; i < kRowCount; ++i) {
+        if (base && kRows[i].cat == Category::covenant_outcome) {
+            continue;
+        }
         events.emplace_back(kRows[i].first, int(i) + 1);
         events.emplace_back(u64(kRows[i].last) + 1, -(int(i) + 1));
     }
@@ -106,14 +111,33 @@ const std::vector<CategoryRange>& CategoryRanges() {
     return ranges;
 }
 
-Category CategoryOf(u32 id) {
-    const auto& r = CategoryRanges();
+namespace {
+Category Lookup(const std::vector<CategoryRange>& r, u32 id) {
     auto it = std::upper_bound(r.begin(), r.end(), id, [](u32 v, const CategoryRange& x) { return v < x.first; });
     if (it == r.begin()) {
         return Category::never_sync;
     }
     --it;
     return id <= it->last ? it->cat : Category::never_sync;
+}
+std::atomic<bool> g_covenant_per_player{true};
+} // namespace
+
+Category CategoryOf(u32 id) {
+    return Lookup(CategoryRanges(), id);
+}
+
+Category BaseCategoryOf(u32 id) {
+    static const std::vector<CategoryRange> base = BuildRanges(true);
+    return Lookup(base, id);
+}
+
+void SetCovenantPerPlayer(bool on) {
+    g_covenant_per_player.store(on, std::memory_order_relaxed);
+}
+
+bool CovenantPerPlayer() {
+    return g_covenant_per_player.load(std::memory_order_relaxed);
 }
 
 Category CategoryOfLinear(u32 id) {
@@ -315,6 +339,7 @@ bool CandidateCategory(Category c) {
     case Category::world_state:
     case Category::item_lot_picked:
     case Category::npc_quest:
+    case Category::covenant_outcome:  // tracked as its base category (HostCandidate); the guest decides
         return true;
     default:
         return false;
@@ -357,10 +382,25 @@ int NpcStateGroup(u32 id) {
 }
 
 bool HostCandidate(u32 id, Category cat) {
+    if (cat == Category::covenant_outcome) {
+        // The host keeps tracking these (its own snapshot / changes carry them, so a guest of a host
+        // with the rule off still gets them); the guest's policy drops them while the rule is on.
+        cat = BaseCategoryOf(id);
+        if (cat == Category::covenant_outcome) {
+            return false;
+        }
+    }
     return CandidateCategory(cat) && !InRanges(kExcluded, id) && !NeverWritable(id);
 }
 
 SyncMode ModeFor(const Policy& p, u32 id, Category cat) {
+    if (cat == Category::covenant_outcome) {
+        // 0.7.3: covenant outcomes stay in each player's own save while the host's rule is on.
+        if (p.covenant_per_player) {
+            return SyncMode::Off;
+        }
+        cat = BaseCategoryOf(id);
+    }
     if (!HostCandidate(id, cat)) {
         return SyncMode::Off;
     }
@@ -2224,6 +2264,7 @@ void GuestTick(Global& g, const FlagStore& store, u32 map_id) {
             Log("guest: prologue over: applying the %zu held host flag change(s)", pending);
         }
     }
+    g.policy.covenant_per_player = CovenantPerPlayer();  // the host's rule (party glue)
     const auto before = g.applier.counters();
     const std::size_t held_before = g.applier.Held();
     const std::size_t n = g.applier.Apply(store, g.policy, mode0_window, map_id ? map_id : 0xffffffffu);
@@ -2728,6 +2769,17 @@ void ApplyHostFlags(u64 epoch, const std::vector<FlagChange>& changes) {
     if (!g.enabled) {
         return;
     }
+    if (CovenantPerPlayer()) {
+        std::string ids;
+        for (const FlagChange& c : changes) {
+            if (CategoryOf(c.id) == Category::covenant_outcome && ids.size() < 200) {
+                ids += (ids.empty() ? "" : " ") + std::to_string(c.id) + "=" + (c.value ? "1" : "0");
+            }
+        }
+        if (!ids.empty()) {
+            Log("guest: covenant outcome change(s) of the host kept out of the own save (per player): %s", ids.c_str());
+        }
+    }
     std::lock_guard<std::mutex> lk(g.mu);
     g.applier.QueueChanges(epoch, changes);
 }
@@ -2741,11 +2793,31 @@ void ApplyHostSnapshot(const FlagSnapshot& snap) {
     Policy policy;
     {
         std::lock_guard<std::mutex> lk(g.mu);
+        g.policy.covenant_per_player = CovenantPerPlayer();
         policy = g.policy;
     }
     // The candidate-bit walk (~ms) here on the link's thread, outside g.mu: the main thread's
     // apply then only writes the planned flags.
     GuestApplier::SnapshotPlan plan = GuestApplier::PlanSnapshot(snap, policy);
+    if (policy.covenant_per_player) {
+        // 0.7.3: what the host's world has of the covenant outcomes stays there (the world mirror
+        // shows it while summoned); the own save keeps its own.
+        std::size_t n = 0;
+        std::string ids;
+        for (const auto& [block, bits] : snap.blocks) {
+            for (u32 b : bits) {
+                const u32 id = block * kBitsPerBlock + b;
+                if (b < kBitsPerBlock && CategoryOf(id) == Category::covenant_outcome) {
+                    ++n;
+                    if (ids.size() < 200) {
+                        ids += (ids.empty() ? "" : " ") + std::to_string(id);
+                    }
+                }
+            }
+        }
+        Log("guest: covenant outcomes per player: %zu covenant flag(s) set in the host's world not copied into the "
+            "own save%s%s", n, n ? ": " : "", ids.c_str());
+    }
     std::lock_guard<std::mutex> lk(g.mu);
     g.host_snap = snap;
     g.have_host_snap = true;

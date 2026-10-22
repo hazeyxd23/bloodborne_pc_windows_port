@@ -749,6 +749,7 @@ Rules FromSettings() {
     r.npc_mirror = v.party_npc_mirror;
     r.npc_fights = v.party_npc_fights;
     r.gather = v.party_gather;
+    r.covenant_per_player = v.party_covenant_per_player;
     r.rot_cleanse_boss = v.party_rot_cleanse_boss;
     r.rot_cleanse_killer = v.party_rot_cleanse_killer;
     r.rot_cleanse_echoes = v.party_rot_cleanse_echoes;
@@ -1297,6 +1298,7 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::NpcMirror, r.npc_mirror);
     party::status::SetHostRule(party::status::HostRule::NpcFights, r.npc_fights);
     party::status::SetHostRule(party::status::HostRule::Gather, r.gather);
+    party::status::SetHostRule(party::status::HostRule::CovenantPerPlayer, r.covenant_per_player);
     party::status::SetHostRule(party::status::HostRule::RotCleanseBoss, r.rot_cleanse_boss);
     party::status::SetHostRule(party::status::HostRule::RotCleanseKiller, r.rot_cleanse_killer);
     party::status::SetHostRule(party::status::HostRule::RotCleanseEchoes, r.rot_cleanse_echoes);
