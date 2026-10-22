@@ -86,8 +86,21 @@ Rules & Sync *NPC hunters fight the whole party*, bbport.ini `party_npc_fights`,
   table, under the game's four-player limit. The party's default of 3 players leaves one; a 4-player
   party has none (as in vanilla with three cooperators). Nothing is patched for it.
 
-## 4. Live evidence
+## 4. Live evidence (smoke phase `nf`, agents/npcfights/smoke/run2-run10, 2026-10-22)
 
-See the nf run notes in the commit and the run folders (`agents/npcfights/smoke/run*/nf`). Run 4:
-Henryk at the Tomb (guest hits, guest kill, quest step in the guest's save), Alfred in Cainhurst
-with the rule off (the "before") and on (after a party round trip).
+| Case | Before (vanilla + party) | After (rule on) |
+|---|---|---|
+| Henryk + Eileen, Tomb of Oedon | Spawn on both games (same handles), Eileen joins as the ally (1365), the guest's R1s take Henryk 1716 -> 1488 on both games, the guest's killing blow kills him on the host ~5 s later, 12410810 / 1367 on the host and `1367=1/1` in the guest's own save at the next load (runs 3-7) | unchanged (no gate involved; runs 4-7 pass the same rows) |
+| Alfred hostile, Cainhurst (state 1349; run 10 from the first lamp 2502950, read from the chr dumps at ~290 m) | host team 27, **guest team 26** (friendly: no lock-on, no hits; runs 5-10) | after a load the guest's copy of 12500050 passes its `1003[6]`: team 27 on the guest too (`guest copy of event 12500050 runs as the host's`, runs 4-10; run 10 17/17, the smoke as committed) |
+| Blood-drunk Eileen, Grand Cathedral (1374 + 9802) | the guest that arrives after the host already gets her through the init event (12400650 label 1, no gate): team 27 on both (run 8) | same; the gate matters for a transition while the guest stands in the map. Her death from the guest's blow reached the host (1368, 1705) and the guest's own save (`1368=1/1`, run 8) |
+
+Not verified live:
+- a guest's **hits** on a hunter whose team the rule fixed: from the Queen's Chamber lamp (2502951)
+  both players and Alfred fell through an undrawn void in this test save (runs 7, 9; also with the rule
+  off, so not this change) and the blood-drunk Eileen stood idle
+  (no lock-on on either game); the Tomb fight shows the damage path itself works for a hostile NPC
+  chr (team 23);
+- the mid-session transitions (12400593, 12400656, 12500053, 12700905, 13400920, 13500920) firing
+  while the guest stands next to the NPC; the rewrite is the same as the init's (12500050), which was;
+- the assassins (Brador, the Fishing Hamlet), Valtr, Djura, the DLC hunters;
+- AI-player summons (Bell signs, the Chalice invader) with a full party.
