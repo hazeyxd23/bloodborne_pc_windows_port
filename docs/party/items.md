@@ -23,7 +23,7 @@ Markers: **[static]** proven from code/data here, **[inferred]** from names/shap
 | NPC quest rewards? | No for EMEVD gifts (`common 9040/9100/9110`, `2003[4]`, host only). Talk-script (ESD) gifts were not analysed. [static for EMEVD] |
 | Blood Echoes | Enemy kills: **50 %** for a client (`0x18FC93D`). Boss clear bonus (GameAreaParam): **50 %** for a phantom (`0x1335578..0x1335591`). Black/other phantoms (chr type 2) get no kill echoes (`0x18C5179`). [static] |
 | Insight | A white phantom gets **+1 Insight** when the host's boss dies: `BlockClear2` applies SpEffect **4680** (`heroPointDamage = -1`) at `0x13852B1`. The host pays 1 Insight per Beckoning Bell (from_api_schema.md 8). [static; that -1 means +1 is inferred from the name] |
-| Bell-related items | Covenant/Vermin lots in `BlockClear2` (5900/5920/5930 = Vermin, 5910/5940/5950 empty) are given with `hostOnly = 0`, so clients get them too. Bells themselves come from per-player Messenger gifts (lot 10010, flag 6622, personal block 6000-8999). [static] |
+| Bell-related items | Covenant/Vermin lots in `BlockClear2` (5900/5920/5930 = Vermin, 5910/5940/5950 empty) are given with `hostOnly = 0`, so clients get them too. Bells themselves come from per-player Messenger gifts (lot 10010, flag 6622, personal block 6000-8999; the Beckoning Bell is the director's grant). The Old Hunter Bell (lot 10050, flag 6670) is replayed from the host since 0.7.3 (10.8). [static] |
 | Shops, Doll, level-up | Not while summoned. Phantoms cannot use lamps (lamp gate `0x12F8315`, travel.md), and the Dream is host-only for clients (m21 `1003[6]` guards). Shop stock flags are per-player (6000-8999, kept in the own pool in load mode 1). Level, echoes, insight and inventory live in the guest's own `PlayerGameData` (`[[0x553B130]+8]`), so they persist [inferred: not overlaid like flags]. |
 
 ## 1. Globals and functions
@@ -215,7 +215,7 @@ treasure the host picks up, NPC gifts), exactly once, even across crashes and re
    Backbone 50700000, Kin Coldblood 51001900, 25700000/75002400 (item names missing from the FMG), 22502610,
    Tear Stone 14000 (and 9040 NPC slots with flag -1).
 3. Deny list (never replay; per-player or repeatable): lots whose flag is in 6000-8999 (Messenger gifts
-   10000/10010/10050, DLC/costume 6670-6678; 10040 the Eye of a Blood-drunk Hunter is replayed since
+   10000/10010; 10050 the Old Hunter Bell is replayed since 0.7.3, 10.8, DLC/costume 6670-6678; 10040 the Eye of a Blood-drunk Hunter is replayed since
    2026-10-14, quest_audit.md F3), covenant gems `common 9440`, rune/gem use `9500`,
    repeatables `common 9100` / `13501940` (何度でも), DLC messenger hats `12105064`, PvP/covenant lots
    5500-5950, 16581, 5020, chalice-dungeon lots (area 29, flag -1 boss lots 1100xxxxx).
@@ -814,6 +814,85 @@ Blood Gem Workshop Tool, Saw / Sword Hunter Badge, Old Hunter Bell; the director
 there too. Smoke s2 (`keyitems`) runs that walk on guest 1 4 s after its arrival at m24_01
 (`BB_TEST_MENU_FILE` line `m24_01 4 ...`: a map instead of title / world / joined waits for that
 map, together) and needs the key name in the log.
+
+### 10.8 Early items for every player (0.7.3)
+
+Report: in a party at the start of the game, (1) after one player took the starting weapons from the
+Dream's messengers the other could not get any, (2) only the player who talked to Iosefka got her
+vial, (3) the Old Hunter Bell reached one player only.
+
+**Starting weapons [static, live].** No item lot: the messengers 2100215 / 2100220 (right hand) and
+2100216 / 2100221 (left) open ShopLineupParam rows 2000-2002 (weapons 7000000, 5000000, 22000000;
+stock flags 72101000-72101002) and 2010 / 2011 (14000000 / 6000000; 72101011 / 72101010), price 0.
+m21 event 12101020 (12101021 likewise): `1003[101]` to label 0 once its own flag is set (the
+messengers are taken out of the back read: gone), else wait for the local chr type 0 within 6 m,
+rise (12105050), wait for any of its stock flags, set 12101020. The done flags were `npc_quest`
+(D8, Follow): the host's pick went into every guest's save (snapshot and live), so a guest that had
+not picked yet found its messengers gone for good in its own Dream, without a weapon. The shop
+stock flags were per player already (`ShopStockFlag`). Fix: `flag_tool.py` override rows
+12101020-12101021 -> `never_sync` (party_flags.inc regenerated): not synced, never a world action.
+A save that got the host's flag from an older build (done flag set, none of its own stock flags) is
+repaired in its own world (load mode 0, session idle / hosting; `StartWeaponFlagsToClear`,
+party_start.h; the director clears the done flag, logged `start: starting weapon flag N was set
+without a pick of this player's own ...`); the messengers come back at the next Dream load. A
+summoned guest still cannot pick in the host's Dream (the event needs chr type 0, and the host's
+picks hide the messengers there): it picks in its own Dream (before joining, or after *Leave*).
+With *Party starts* = after the prologue (default) every player has its weapons before any summon.
+
+**Iosefka's Blood Vial [static, live].** Talk ESD t241313 sets the trigger 72410310 (common 9100
+slot 1 awards lot 23000, goods 703, maxNum 1) in three branches, each gated by `72410301 == 0`,
+goods 703 held 0 and `72410311 == 0`, then sets 72410301; m24_01 event 12410736 clears 72410301 at
+the next clinic load in the own world (she gives another one when you have none). 72410301 is
+`npc_quest` (shared), so after one player's talk she gave nothing to the others. A host's talk
+already reached the guests (ledger 5, given while summoned with *Key items at once*); a guest's
+talk gave only the guest (P2, `ItemSource::Repeat`) and moved Iosefka on for the host. Now
+(`SharedRepeatGiftLot`): the guest's own repeat grant stays, and the guest also reports the lot up
+(EVENT gift_up with its ledger bit 60009005 as the flag, `GuestGiftShareable`); the host's world
+awards it unless its ledger bit is set or it holds one, and C3 gives it to every member once (the
+talker holds its copy: "unique item held already", ledger bit set). The rejoin full list also sends
+ledger lots whose ledger bit is set on the host (the vial's 9040 done flag 9046 is set by no script).
+
+**Old Hunter Bell [static, live].** m21 event 12101026: needs 12101022 (Notebook) and 12100105,
+waits for the talk flag 12101027 (`t210720`, world_state: a guest's talk in the host's Dream goes
+up as a world action), then `2003[4]` lot 10050 only for chr type 0 (skipped on a client). So a
+summoned guest's talk gave the HOST the bell and the guest nothing. Lot 10050 is no longer denied
+(`ItemLotDenied`): the host's award and the rejoin full list (host flag 6670) give it to every
+member once; 6670 is in the personal block, so each player's own flag decides.
+
+Live (2 loopback instances, default save, `BB_PARTY_START=immediate`):
+* r2: guest with its weapon picks and done flags cleared (`BB_PARTY_TEST_PROLOGUE`, own world): the
+  repair line for 12101020 (set without a pick); summoned in the host's Dream (host picks set):
+  `test read (load mode 1, own save / visible): 12101020=0/1 12101021=0/1`; after *Leave*, own world:
+  `12101020=0/0 12101021=0/0 72101000=0/0 ...` (no stock flag of the host's either). Vial: the
+  guest's `guest_flag=72410310` (what the talk writes): `gave ... lot 23000 ... goods 703 x1 (held 0
+  -> 1, item-get dialog)` and `gift: lot 23000 (ledger flag 60009005) reported to the host`; host
+  `gift from slot 1: lot 23000 (flag 60009005) awarded in the host's world`, `own award of ledger lot
+  23000: ledger flag 60009005 set`, `host award #0 lot 23000 ... items [4:703x1]`; guest `skip ...
+  lot 23000 (ledger 5 ...) while summoned: unique item held already ...; own-save flag(s) 60009005 set
+  instead`. Both screens: "Iosefka's Blood Vial 1" (`evidence/r2/guestvial_3s_inst0/1.png`).
+* r3: the host's test award of lot 23000 (`BB_PARTY_ITEMS_HOST_TEST`): guest `gave ... lot 23000
+  (ledger 5 = flag 60009005, award) while summoned (host's item list): goods 703 x1 (held 0 -> 1,
+  item-get dialog)`, "Iosefka's Blood Vial 1" on the guest's screen (`evidence/r3/vial_2s_inst1.png`).
+  The rejoin full list now carries lot 10050 (flag 6670) to a guest whose 6670 was cleared:
+  `lot 10050 (flag 6670, full): key item / unique goods 4312: given now while summoned`, then skipped by
+  the fit rule because the test had not yet taken the guest's bell away (`held 1`): the replay path is
+  open (before, the host never offered it); the item box itself was not seen live.
+* r4: the host's own messengers with its picks cleared (`12101020:0`, stock flags 0) after a Dream
+  reload: they rose (12105050 = 1; screenshots `evidence/r4/rise_*_inst0.png`: the messengers on the
+  stairs holding the weapons), and **2.8 s later 12101020 = 1 on the host with none of its stock
+  flags set**, 57 ms after the same flag on the summoned guest (whose own save has its picks): the
+  guest's copy of event 12101020 ended and the event state packet 0x31 (guest_services.md 2.1)
+  ended the host's copy, so the host's messengers sank before it picked - the second way one
+  player's pick took another's messengers [live; mechanism inferred from the order of the two lines
+  and the bath messengers' 0x31 sync]. Fix: `PerPlayerMessengerEvent` also drops the 0x31 packets of
+  the gift messengers' events 12101020, 12101021, 12101022 (Notebook), 12101024 (Beckoning Bell),
+  12101026 (Old Hunter Bell), 12101028 (Eye): each ends on its own player's pick / personal flag
+  (the same path may have ended a host's Old Hunter Bell event with a guest's). Not re-run live (the
+  run budget was spent): the next smoke in the Dream should show the host's messengers staying up
+  next to a guest with picks, `Messengers: event 12101020's state from another player not applied`.
+
+Unit tests: party-items-test (`test_deny`, gift_up tests), party-start-test
+(`test_weapon_repair`), party-worldact-test (categories, world actions).
 
 ## 11. Gestures (2026-10-20)
 

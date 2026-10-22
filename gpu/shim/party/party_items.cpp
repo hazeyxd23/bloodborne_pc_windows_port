@@ -289,6 +289,10 @@ bool RepeatGiftLotId(std::int32_t lot) {
     return lot == 17010 || lot == 23000 || lot == 24060 || lot == 28000 || lot == 32020;
 }
 
+bool SharedRepeatGiftLot(std::int32_t lot) {
+    return lot == 23000;
+}
+
 std::optional<ItemGrant> MakeRepeatGrant(std::int32_t lot, std::uint64_t n) {
     if (!RepeatGiftLotId(lot)) {
         return std::nullopt;
@@ -337,8 +341,16 @@ bool ItemLotDenied(std::int32_t lot, std::int32_t flag) {
     // DLC boss rewards whose flags live in the personal block 6000-8999 (Ludwig 3401800 -> 6674,
     // Laurence 3401850 -> 6673): a phantom never gets them (2003[4] is skipped on clients) and
     // the flag is the guest's own, so a replay is exact. Every other lot with a personal flag is
-    // a per-player gift (Messenger 10000/10010/10050, DLC NPCs 43120/43130, 43800).
+    // a per-player gift (Messenger 10000/10010, DLC NPCs 43120/43130, 43800).
     if (lot == 3401800 || lot == 3401850) {
+        return false;
+    }
+    // The Old Hunter Bell (lot 10050, personal flag 6670): its Messenger event 12101026 awards it
+    // only for chr type 0 (the 2003[4] is skipped on a client), so a guest living in the host's
+    // Dream never got it, and the talk flag 12101027 it waits for went to the host's world (the
+    // host got the bell from the guest's talk). Replayed from the host like the Eye (10040); the
+    // flag is each player's own, so the replay gives it once per player (0.7.3).
+    if (lot == 10050) {
         return false;
     }
     if (InRange(flag, 6000, 8999)) {
@@ -348,7 +360,8 @@ bool ItemLotDenied(std::int32_t lot, std::int32_t flag) {
     // Messenger gifts (per player). Not 10040, the Eye of a Blood-drunk Hunter (DLC entry): its
     // event 12101028 needs chr type 0, so it never runs on a summoned guest; the host's copy is
     // replayed to everyone (flag 50000100) or a guest who never stands in its own Dream lacks it.
-    case 10000: case 10010: case 10011: case 10050:
+    // Not 10050 either (the Old Hunter Bell, above). The Beckoning Bell comes from the director.
+    case 10000: case 10010: case 10011:
     case 10500: case 11500: case 12500:                         // covenant gems (common 9440)
     case 17010: case 24060: case 28000: case 32020:             // common 9100 (repeatable)
     case 43000:                                                 // 13501940 (repeatable)
@@ -608,6 +621,11 @@ std::vector<ItemGrant> FilterPeerItems(const std::vector<ItemGrant>& in, std::si
 }
 
 bool GuestGiftShareable(std::int32_t lot, std::int32_t flag) {
+    if (SharedRepeatGiftLot(lot)) {
+        // A flagless ledger lot: reported with its ledger bit, which the host's own award sets.
+        const std::int32_t idx = ItemLedgerIndex(lot);
+        return idx >= 0 && flag == static_cast<std::int32_t>(kItemLedgerBase) + idx && !ItemLotDenied(lot, kItemNone);
+    }
     return flag > 0 && ItemLotFlag(lot) == flag && !ItemLotDenied(lot, flag) &&
            !InstancedTreasureFlag(flag, true, false);
 }
@@ -3008,7 +3026,11 @@ bool TakeHostFullItems(int* slot, std::vector<ItemGrant>* out) {
         }
     }
     for (const LedgerRow& r : kLedger) {
-        if (IsFlag(man, r.done_flag) && !ItemLotDenied(r.lot, kItemNone)) {
+        // The awarding event's done flag, or the host's own ledger bit (its own award of the lot,
+        // AwardEntry): Iosefka's Blood Vial (ledger 5) comes from common 9100; the common 9040
+        // slot with its done flag 9046 is set by no talk script.
+        const bool had = IsFlag(man, r.done_flag) || IsFlag(man, std::int64_t(kItemLedgerBase) + r.idx);
+        if (had && !ItemLotDenied(r.lot, kItemNone)) {
             ItemGrant g;
             g.lot = r.lot;
             g.ledger = r.idx;
@@ -3475,6 +3497,18 @@ bool OfferRepeatGift(std::int32_t lot) {
     }
     Log("guest's own repeatable gift lot %d (#%llu this session): %s", lot, static_cast<unsigned long long>(n),
         taken ? "queued (given while summoned, or at home)" : "queue full");
+    if (SharedRepeatGiftLot(lot)) {
+        // 0.7.3: Iosefka's Blood Vial goes to the whole party (all progress shared): the talk moved
+        // her on in the host's world too (72410301, npc_quest), so nobody else could get one from
+        // her. The host's world awards it (once: the host's ledger bit) and C3 hands it on; this
+        // guest holds its own copy by then (unique goods: "owned", skipped).
+        const std::int32_t bit = static_cast<std::int32_t>(kItemLedgerBase) + ItemLedgerIndex(lot);
+        std::lock_guard<std::mutex> lk(g_gift_mu);
+        if (GuestGiftShareable(lot, bit) && g_gift_up.size() < 64) {
+            g_gift_up.push_back(GiftUpToJsonText(lot, bit));
+            Log("gift: lot %d (ledger flag %d) reported to the host (shared with the party)", lot, bit);
+        }
+    }
     return taken != 0;
 }
 
