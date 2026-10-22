@@ -21,7 +21,7 @@
 //    happen on the host's game only: the guest keeps a friendly chr it cannot lock on to or hurt,
 //    or does not see it at all (the blood-drunk Eileen stays out of the guest's backread).
 //
-// The rule (the host's, System > Shared world "NPC hunters fight the whole party", bbport.ini
+// The rule (the host's, System > Party rules: World "NPC hunters fight the whole party", bbport.ini
 // party_npc_fights, BB_PARTY_NPC_FIGHTS; default on): a guest's copy of each GuestRun event runs as
 // the host's does. Its gate instruction is passed (4[3]: the chr type it waits for becomes the
 // guest's own; 1003[6]: the client state it ends on becomes one that never matches) and its flag
