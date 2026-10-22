@@ -1007,7 +1007,7 @@ void EnemyHpTestTick(const GameSnapshot& s) {
 /// Test aid (BB_PARTY_CHR_DUMP=R, prologue NPC check): every non-player chr within R m (default
 /// 40) of the local player - entity id (+0x1F0), handle, team, HP, position, disabled / draw bits -
 /// once the world has stood 4 s, again whenever that set changes (a chr enabled, disabled, killed,
-/// added): the host's and a guest's lists side by side show a chr only one game has.
+/// added, hurt): the host's and a guest's lists side by side show a chr only one game has.
 void ChrDumpTick(const GameSnapshot& s) {
     static const float radius = [] {
         const char* v = std::getenv("BB_PARTY_CHR_DUMP");
@@ -1052,7 +1052,8 @@ void ChrDumpTick(const GameSnapshot& s) {
                           double(p[0]), double(p[1]), double(p[2]), double(d), off ? " DISABLED" : "");
             lines.push_back(b);
             char k[48];
-            std::snprintf(k, sizeof k, "%d/%d/%d;", entity, hp > 0 ? 1 : 0, off ? 1 : 0);
+            // HP too (D11: an NPC hunter's HP on every game during a fight), at most one dump a second
+            std::snprintf(k, sizeof k, "%d/%d/%d;", entity, hp, off ? 1 : 0);
             sig += k;
         }
     }
