@@ -890,6 +890,15 @@ Live (2 loopback instances, default save, `BB_PARTY_START=immediate`):
   (the same path may have ended a host's Old Hunter Bell event with a guest's). Not re-run live (the
   run budget was spent): the next smoke in the Dream should show the host's messengers staying up
   next to a guest with picks, `Messengers: event 12101020's state from another player not applied`.
+* r5 (smoke group `items_every`, phase ie, after the merge): the host's messengers rose
+  (`12101020=0 12105050=1`, picks cleared) and **stayed up**: 12101020 never went to 1 on the host
+  (r4: 2.8 s after the rise); the host logged `Messengers: event 12101026's state from another player
+  not applied` (the guest's copy of the Old Hunter Bell event, its end dropped; no packet of 12101020
+  came this time). The bell's item box was not reached: the join's full list had already skipped lot
+  10050 (the guest still held its bell then) and a guest takes each flag's grant once per session, so
+  the host's later award was not applied - a fixture fault, fixed in the phase (the host's 6670 is
+  cleared too, so the full list has no lot 10050). The scripted weapon pick did not open the talk
+  (a warp 1.5 m from messenger 2100215 showed no prompt): left out of the phase.
 
 Unit tests: party-items-test (`test_deny`, gift_up tests), party-start-test
 (`test_weapon_repair`), party-worldact-test (categories, world actions).
