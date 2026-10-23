@@ -928,7 +928,7 @@ the guest's own spot disappears after the grant; a second lot of the same goods 
 are in ITEM_LOT_FLAG. The key catch-up (`KeyCatchupLots`: flag set, key missing in the own save ->
 given again) stays on the 8 progression keys (`catchup` 1): quest items can be handed in, and are
 not re-given. `BB_PARTY_SHARED_TREASURE=0` (testing): the old per-player rule. Ordinary treasure
-stays per player. Test: tests/test_party_items.cpp, smoke phase `ie` (host flags 52410920 shared,
+stays per player. Test: tests/test_party_items.cpp, smoke phase `ie` (host flags 52420900 (Orphanage Key) shared,
 52410140 per player).
 
 ## 11. Gestures (2026-10-20)
