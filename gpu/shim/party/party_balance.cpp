@@ -25,6 +25,7 @@
 #include "party_async_io.h"
 #include "party_enemy_census.h"
 #include "party_ids.h"
+#include "party_levelsync_rules.h"
 #include "party_director.h"
 #include "party_droproll.h"
 #include "party_flow.h"
@@ -750,6 +751,8 @@ Rules FromSettings() {
     r.npc_mirror = v.party_npc_mirror;
     r.npc_fights = v.party_npc_fights;
     r.any_kidnap = v.party_any_kidnap;
+    r.level_sync = v.party_level_sync;
+    r.phantom_hp = v.party_phantom_hp;
     r.gather = v.party_gather;
     r.covenant_per_player = v.party_covenant_per_player;
     r.travel_vote = v.party_travel_vote;
@@ -1284,6 +1287,143 @@ void RotCleanseTick(const GameSnapshot& s, const Rules& r, bool host, bool in_wo
     }
 }
 
+
+// ---- 0.7.5 level sync (party_levelsync_rules.h) ----
+// Per player chr every 0.5 s: does it carry SpEffect 9200 (the game's level sync) as the host's rule
+// says? BB_PARTY_LEVELSYNC_LOG=1 logs each player's level, the range, the effect and the stats every
+// 5 s; BB_PARTY_LEVELSYNC_OBSERVE=1 only logs (the game's own behaviour, for the A/B baseline).
+constexpr u64 kSlotGameDataMan = 0x553b130, kSlotClientMan = 0x5540288;
+
+u64 PlayerGameDataOf(u64 chr) {
+    u64 vt = 0, fn = 0;
+    if (!chr || !SafeGet(chr, &vt) || !vt || !SafeGet(vt + 0x1c8, &fn) || !fn) return 0;
+    return reinterpret_cast<u64(BB_COOP_SYSV*)(u64)>(fn)(chr);
+}
+
+/// The first game-data record with +0x10 == 1 (the game's "host" record, 0x15077c0): the local one, the
+/// four session records (stride 0x6a0), then the 40 pointers.
+u64 HostRecord() {
+    const u64 gdm = Slot(kSlotGameDataMan);
+    if (!gdm) return 0;
+    const u64 local = Field<u64>(gdm, 8);
+    if (local && Field<int>(local, 0x10, -1) == 1) return local;
+    const u64 four = Field<u64>(gdm, 0x10);
+    for (int i = 0; four && i < 4; ++i)
+        if (Field<int>(four + u64(i) * 0x6a0, 0x10, -1) == 1) return four + u64(i) * 0x6a0;
+    const u64 table = Field<u64>(gdm, 0x20);
+    for (int i = 0; table && i < 0x28; ++i) {
+        const u64 rec = Field<u64>(table, u64(i) * 8);
+        if (rec && Field<int>(rec, 0x10, -1) == 1) return rec;
+    }
+    return 0;
+}
+
+bool RemoveEffectNode(u64 chr, u64 node) {
+    const u64 list = Field<u64>(chr, 0x1c8);
+    if (!list || !node) return false;
+    reinterpret_cast<void(BB_COOP_SYSV*)(u64, u64, u32)>(Guest(0x17e1d90))(list, node, 1);
+    return true;
+}
+
+int CountEffect(u64 chr, int id, u64* first = nullptr) {
+    int n = 0;
+    u64 node = Field<u64>(Field<u64>(chr, 0x1c8), 8);
+    for (int guard = 0; node && guard < 256; ++guard) {
+        if (Field<int>(node, 0x40, -1) == id) {
+            if (!n && first) *first = node;
+            ++n;
+        }
+        node = Field<u64>(node, 0x58);
+    }
+    return n;
+}
+
+void LevelSyncTick(bool rule_on, bool phantom_hp_on, Clock::time_point now) {
+    static Clock::time_point next{}, next_log{};
+    static bool saved_range = false, wrote_range = false;
+    static u32 orig_pct = 0, orig_add = 0;
+    static const bool observe = [] { const char* v = std::getenv("BB_PARTY_LEVELSYNC_OBSERVE"); return v && *v && *v != '0'; }();
+    static const bool logging = [] { const char* v = std::getenv("BB_PARTY_LEVELSYNC_LOG"); return v && *v && *v != '0'; }();
+    if (now < next) return;
+    next = now + std::chrono::milliseconds(500);
+    const u64 wcm = Slot(kSlotWorldChrMan);
+    if (!wcm) return;
+    const u64 host = HostRecord();
+    const int host_level = host ? Field<int>(host, 0x90, -1) : -1;
+    const u64 cm = Field<u64>(Slot(kSlotClientMan), 0x18);
+    // The matching range (SprjNetworkClientMan +0x18: +0x8e4 percent, +0x8e0 levels) is an unlimited
+    // placeholder here (no matching server): with the rule on a party runs the game's normal range, the
+    // game's own step and its stat curves (0x1582940) read it; off, the placeholder is put back.
+    if (cm && !observe) {
+        const u32 pct = Field<u32>(cm, 0x8e4), add = Field<u32>(cm, 0x8e0);
+        if (rule_on && (pct != levelsync::kPartyRangePercent || add != levelsync::kPartyRangeAdd)) {
+            if (!saved_range) orig_pct = pct, orig_add = add, saved_range = true;
+            const u32 p = levelsync::kPartyRangePercent, a = levelsync::kPartyRangeAdd;
+            SafeWrite(cm + 0x8e4, &p, 4);
+            SafeWrite(cm + 0x8e0, &a, 4);
+            wrote_range = true;
+            Log("level sync: matching range +%u %% +%u levels (was +%u %% +%u)", p, a, pct, add);
+        } else if (!rule_on && wrote_range) {
+            SafeWrite(cm + 0x8e4, &orig_pct, 4);
+            SafeWrite(cm + 0x8e0, &orig_add, 4);
+            wrote_range = false;
+            Log("level sync: matching range back to +%u %% +%u levels", orig_pct, orig_add);
+        }
+    }
+    const float mult = levelsync::RangeMultiplier(cm != 0, Field<u32>(cm, 0x8e4));
+    const float add = levelsync::RangeAdd(cm != 0, Field<u32>(cm, 0x8e0));
+    const bool do_log = logging && now >= next_log;
+    if (do_log) next_log = now + std::chrono::seconds(5);
+    u64 chrs[9];
+    int n = 0;
+    chrs[n++] = Field<u64>(wcm, 0x60);
+    const int count = Field<int>(wcm, 0x30, 0);
+    const u64 entries = Field<u64>(wcm, 0x38);
+    for (int i = 0; entries && count > 0 && count <= 8 && i < count && n < 9; ++i) {
+        const u64 c = Field<u64>(entries + u64(i) * 0x38, 0);
+        if (c && c != chrs[0]) chrs[n++] = c;
+    }
+    for (int i = 0; i < n; ++i) {
+        const u64 chr = chrs[i];
+        if (!chr) continue;
+        const u64 pgd = PlayerGameDataOf(chr);
+        if (!pgd) continue;
+        const int level = Field<int>(pgd, 0x90, -1);
+        const int kind = Field<int>(pgd, 0x10, -1);
+        const bool eligible = host && pgd != host && kind >= 2 && kind < 0x7fff;
+        const bool above = eligible && levelsync::AboveRange(level, host_level, mult, add);
+        u64 node = 0;
+        const int has = CountEffect(chr, levelsync::kLevelSyncEffect, &node);
+        const levelsync::Action act = levelsync::Decide(rule_on, eligible, above, has);
+        const char* did = "";
+        if (!observe) {
+            if (act == levelsync::Action::Apply) {
+                did = ApplyEffect(chr, levelsync::kLevelSyncEffect) ? ", applied" : ", apply failed";
+            } else if (act == levelsync::Action::Remove) {
+                did = RemoveEffectNode(chr, node) ? ", removed" : ", remove failed";
+            }
+        }
+        if (do_log || *did) {
+            const u64 dm = Field<u64>(Field<u64>(chr, 0x3b0), 0x20);
+            // The defence rates the damage step multiplies in (0x17e76b0(list, out): physical, magic, fire,
+            // thunder rate products; the level sync's CalcCorrectGraph 121 is in them).
+            alignas(16) float def[8] = {};
+            if (const u64 list = Field<u64>(chr, 0x1c8); list && i == 0)
+                reinterpret_cast<void(BB_COOP_SYSV*)(u64, float*)>(Guest(0x17e76b0))(list, def);
+            char b[440];
+            std::snprintf(b, sizeof b,
+                          "defence %.3f/%.3f, chr %x%s: level %d, record kind %d, host level %d, range x%.2f +%.0f, %s, 9200 x%d%s, "
+                          "9006 %s 9026 %s, HP %d/%d, stamina max %d, rule %s",
+                          double(def[0]), double(def[1]), Field<u32>(chr, 8, ~0u), i == 0 ? " (local)" : "", level, kind, host_level, double(mult),
+                          double(add), above ? "ABOVE the range" : "within", has, did,
+                          HasEffect(chr, 9006) ? "on" : "off", HasEffect(chr, 9026) ? "on" : "off",
+                          Field<int>(dm, 0xf8, -1), Field<int>(dm, 0xfc, -1), Field<int>(dm, 0x138, -1),
+                          rule_on ? "on" : "off");
+            Log("level sync: %s (phantom health %s)", b, phantom_hp_on ? "on" : "off");
+        }
+    }
+}
+
 void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     ChrDumpTick(s);
     NpcMirrorTick(s, link, host);
@@ -1302,6 +1442,8 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::NpcMirror, r.npc_mirror);
     party::status::SetHostRule(party::status::HostRule::NpcFights, r.npc_fights);
     party::status::SetHostRule(party::status::HostRule::AnyKidnap, r.any_kidnap);
+    party::status::SetHostRule(party::status::HostRule::LevelSync, r.level_sync);
+    party::status::SetHostRule(party::status::HostRule::PhantomHp, r.phantom_hp);
     party::status::SetHostRule(party::status::HostRule::Gather, r.gather);
     party::status::SetHostRule(party::status::HostRule::CovenantPerPlayer, r.covenant_per_player);
     party::status::SetHostRule(party::status::HostRule::TravelVote, r.travel_vote);
@@ -1342,6 +1484,7 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
 
     CensusTick(s);
     const bool in_world = s.world_up && !s.loading && s.player;
+    if (in_world) LevelSyncTick(r.level_sync, r.phantom_hp, now);
     // The rot belongs to the character: each save slot has its own (party_rot.txt), and a new game
     // (its own prologue) drops stacks a deleted character left in its slot.
     if (in_world) RotForSlot(party::flow::CurrentSaveSlot());
