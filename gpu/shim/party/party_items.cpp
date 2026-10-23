@@ -212,15 +212,17 @@ std::vector<std::uint32_t> LedgerBitsToSeed(const std::function<bool(std::uint32
     return out;
 }
 
-constexpr std::int32_t kSharedKeyTreasureLots[] = {
-    2400450,  // Hunter Chief Emblem (Cathedral Ward; the plaza gate 12400760)
-    2800290,  // Upper Cathedral Key (Yahar'gul; ObjAct 2400100)
-    2600550,  // Iron Door Key (Nightmare of Mensis; ObjAct 2600020/2600021)
-    2600610,  // Iron Door Key (second copy)
-    3200720,  // Lecture Theatre Key (Byrgenwerth; ObjAct 3200030)
-    3500800,  // Underground Cell Key (Research Hall; ObjAct 3500040)
-    2200360,  // Rune Workshop Tool (Hemwick; the Memory Altar)
-    2411000,  // Blood Gem Workshop Tool (Central Yharnam; blood gems at the workbench)
+struct SharedTreasure {
+    std::int32_t lot;
+    std::int32_t catchup;  // 1: KeyCatchupLots re-gives it
+    const char* note;
+};
+// Generated (item_tool.py gen-inc): key-item and questline map treasure the host's pickup gives
+// to every member (docs/party/items.md 10.9).
+constexpr SharedTreasure kSharedTreasure[] = {
+#define ITEM_SHARED_TREASURE(lot, catchup, note) {lot, catchup, note},
+#include "party_items.inc"
+#undef ITEM_SHARED_TREASURE
 };
 
 std::vector<std::int32_t> KeyCatchupLots(const std::function<bool(std::uint32_t)>& own_flag,
@@ -240,11 +242,12 @@ std::vector<std::int32_t> KeyCatchupLots(const std::function<bool(std::uint32_t)
     // The shared progression keys / workshop tools found as treasure: picked up (or replayed)
     // while summoned, their flag reached the own save but the key did not (the guest's save had
     // 52411000, the Blood Gem Workshop Tool's, and no tool); the corpse never offers it again.
-    for (const std::int32_t lot : kSharedKeyTreasureLots) {
-        const std::int32_t flag = ItemLotFlag(lot);
-        if (flag > 0 && own_flag(static_cast<std::uint32_t>(flag)) &&
-            std::find(out.begin(), out.end(), lot) == out.end()) {
-            out.push_back(lot);
+    // Only the progression keys / workshop tools (catchup 1): quest items may have been handed in.
+    for (const SharedTreasure& t : kSharedTreasure) {
+        const std::int32_t flag = ItemLotFlag(t.lot);
+        if (t.catchup && flag > 0 && own_flag(static_cast<std::uint32_t>(flag)) &&
+            std::find(out.begin(), out.end(), t.lot) == out.end()) {
+            out.push_back(t.lot);
         }
     }
     return out;
@@ -417,8 +420,19 @@ std::optional<ItemGrant> ClassifyFlag(std::int32_t flag, const std::map<std::int
 }
 
 bool SharedKeyTreasureLot(std::int32_t lot) {
-    return std::find(std::begin(kSharedKeyTreasureLots), std::end(kSharedKeyTreasureLots), lot) !=
-           std::end(kSharedKeyTreasureLots);
+    static const bool off = [] {
+        const char* v = std::getenv("BB_PARTY_SHARED_TREASURE");
+        return v && v[0] == '0' && !v[1];
+    }();  // test switch: the old per-player rule
+    if (off) {
+        return false;
+    }
+    for (const SharedTreasure& t : kSharedTreasure) {
+        if (t.lot == lot) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool InstancedTreasureFlag(std::int32_t flag, bool instanced, bool captured) {
@@ -3618,8 +3632,8 @@ void KeyGoodsWatchTick(const GameSnapshot& gs, int load_mode, double now) {
     for (const LedgerRow& r : kLedger) {
         add(r.lot);
     }
-    for (const std::int32_t lot : kSharedKeyTreasureLots) {
-        add(lot);
+    for (const SharedTreasure& t : kSharedTreasure) {
+        add(t.lot);
     }
     if (held.empty()) {
         return;
