@@ -2971,6 +2971,7 @@ void LiftRiderTick(const GameSnapshot& s) {
         return;
     }
     bool playing = false;
+    std::int32_t anim = -1;  // lifts2: the playing car's animation (its arrival / turn is another segment)
     for (const Lift& l : Lifts()) {
         ObjAnimState car;
         float at[3];
@@ -2979,6 +2980,7 @@ void LiftRiderTick(const GameSnapshot& s) {
         }
         for (const std::int32_t e : {l.car, l.gate_rides ? l.gate : 0}) {
             if (e && ObjectPoint(e, 0, 0, at) && std::hypot(me[0] - at[0], me[2] - at[2]) < kLiftCarRadius) {
+                if (!playing) anim = l.car * 100 + car.anim;  // per car and animation
                 playing = true;
             }
         }
@@ -2988,9 +2990,33 @@ void LiftRiderTick(const GameSnapshot& s) {
     }
     std::uint64_t f = 0;
     SafeRead(s.player + 0x1e1, &f, 5);
+    bool ride_bit = deathrules::RidingObject(f);
+    {
+        // Test aid (lifts2, BB_TEST_LIFT_RIDEBIT_OFF=START:LEN): the local chr's ride bit reads off from
+        // START s for LEN s into every stretch of a car playing within reach (the report's rider whose
+        // bit went off on the moving car; the guard's put-backs then show live).
+        static const char* env = std::getenv("BB_TEST_LIFT_RIDEBIT_OFF");
+        static double play_from = -1;
+        if (!playing) {
+            play_from = -1;
+        } else if (env && env[0]) {
+            const double now = Now();
+            if (play_from < 0) play_from = now;
+            float a = 0, b = 0;
+            if (std::sscanf(env, "%f:%f", &a, &b) == 2 && now - play_from >= a && now - play_from < a + b) {
+                static double logged_from = -2;
+                if (logged_from != play_from) {
+                    logged_from = play_from;
+                    Log("lift ride: test: the ride bit reads off for %.1f s (BB_TEST_LIFT_RIDEBIT_OFF); chr y %.2f, track %s vy %.2f",
+                        double(b), double(me[1]), track.riding ? "riding" : "idle", double(track.vy));
+                }
+                ride_bit = false;
+            }
+        }
+    }
     float put[3];
     const liftrules::RiderStep step =
-        liftrules::RiderTick(track, playing, deathrules::RidingObject(f), Now(), me[0], me[1], me[2], put);
+        liftrules::RiderTick(track, playing, ride_bit, Now(), me[0], me[1], me[2], put, anim);
     if (step != liftrules::RiderStep::through) {
         return;
     }
