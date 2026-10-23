@@ -611,7 +611,7 @@ void Log(const char* fmt, ...) {
     va_start(ap, fmt);
     std::vsnprintf(line, sizeof line, fmt, ap);
     va_end(ap);
-    std::printf("Party: world: %s\n", line);  // "Party: ": the harness reaper counts it as activity
+    std::printf("[coop] Party: world: %s\n", line);  // "Party: ": the harness reaper counts it as activity
     std::fflush(stdout);
 }
 
