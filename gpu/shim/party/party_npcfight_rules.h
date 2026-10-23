@@ -120,10 +120,20 @@ constexpr std::uint8_t kGuestFoeTeam = 23;
 constexpr std::int32_t kTeamArg = 4;  ///< 2004[2]: i32 entity @0, u8 team @4
 
 /// Events that switch an NPC hunter to team 27 on every game (no host-only gate; a guest's copy
-/// runs them as data): the blood-drunk Eileen at a load (12400650), Valtr's (12700901) and the
-/// Hunter's Nightmare hunters' (13400950) inits. Together with kGuestRuns their 27 becomes 23 on a
-/// guest.
-inline constexpr std::int32_t kTeamEvents[] = {12400650, 12700901, 13400950};
+/// runs them as data). Together with kGuestRuns these are every 2004[2] team 27 in the 1.09 EMEVDs
+/// (all maps scanned); their 27 becomes 23 on a guest:
+///   12400590 Alfred hostile at a load (Cathedral Ward, 2400760 / 2400763)
+///   12400650 the blood-drunk Eileen at a load (Grand Cathedral)
+///   12400658 Eileen turns hostile when the host attacks her (talk flag 72400526, Cathedral Ward)
+///   12400900 a hostile NPC (Cathedral Ward, 2400775)
+///   12410800 / 12410806 the Tomb of Oedon init / Eileen turns hostile there (2410900)
+///   12700901 Valtr's init (Forbidden Woods)
+///   12906742 a hostile NPC in the Chalice Dungeons (entity from the event's parameters)
+///   13200109 a hostile NPC in Yahar'gul (entity from the event's parameters)
+///   13400950 the Hunter's Nightmare hunters' init
+///   13500950 a hostile NPC's init in the Research Hall (entity from the event's parameters)
+inline constexpr std::int32_t kTeamEvents[] = {12400590, 12400650, 12400658, 12400900, 12410800, 12410806,
+                                               12700901, 12906742, 13200109, 13400950, 13500950};
 
 inline bool TeamEvent(std::int32_t event) {
     if (GuestRunFor(event)) return true;
