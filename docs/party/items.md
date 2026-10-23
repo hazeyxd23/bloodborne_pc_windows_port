@@ -903,6 +903,34 @@ Live (2 loopback instances, default save, `BB_PARTY_START=immediate`):
 Unit tests: party-items-test (`test_deny`, gift_up tests), party-start-test
 (`test_weapon_repair`), party-worldact-test (categories, world actions).
 
+### 10.9 Key-item and questline treasure goes to everyone (0.7.5)
+
+Report (a player, 2026-10-23): Gascoigne's daughter was killed by the pig in the sewer, the host took
+the Red Jeweled Brooch and the Red Messenger Ribbon, the friends never got them. Host log: `host flag
+52410920: map treasure, per player (guests pick up their own)`. Root cause: `InstancedTreasureFlag`
+(D4) makes every host pickup of a map-treasure flag 5AABZnnn (area != 0, not captured by the award
+hook) per player, except a hand list of 8 progression keys. But these spots only exist after
+host-world state (the daughter's death, a brainsucker's drop), so a guest's own world never offers them.
+An audit of ItemLotParam against EquipParamGoods found 21 more key / quest treasure lots per player.
+
+Fix: `item_tool.py gen-inc` writes `ITEM_SHARED_TREASURE(lot, catchup, note)` rows (party_items.inc):
+every non-Chalice map-treasure lot with a goods slot of goodsType 1 (key item, unique, maxNum 1)
+plus `SHARED_QUEST_LOTS` (the daughter's 2410900 White Messenger Ribbon, 2410910 Red Messenger Ribbon,
+2410920 Red Jeweled Brooch: goodsType differs). 30 lots; `SharedKeyTreasureLot` reads the table, so
+`InstancedTreasureFlag`, `GuestGiftShareable` (a guest's pickup of one goes up to the host and out to
+the others) and the full list on a rejoin all treat them as global. The badges (Saw / Old / Radiant
+Sword / Cosmic Eye Watcher), messenger decorations, Orphanage Key, Laurence's Skull, Astral Clocktower
+Key, Queenly Flesh and the like are shared too: they are unique, so sharing is harmless, and
+sharing keeps the shop unlocks and quest gates equal for everyone. Duplicates: 6.2 applies as before
+(the lot's flag in the guest's own pool, a unique item held = `Owned`, skipped with the flag set), so
+the guest's own spot disappears after the grant; a second lot of the same goods (Old Hunter Badge
+2100500 / 2110015) is skipped as held. `ItemGrantFromPeerAllowed` accepts the rows because the lots
+are in ITEM_LOT_FLAG. The key catch-up (`KeyCatchupLots`: flag set, key missing in the own save ->
+given again) stays on the 8 progression keys (`catchup` 1): quest items can be handed in, and are
+not re-given. `BB_PARTY_SHARED_TREASURE=0` (testing): the old per-player rule. Ordinary treasure
+stays per player. Test: tests/test_party_items.cpp, smoke phase `ie` (host flags 52410920 shared,
+52410140 per player).
+
 ## 11. Gestures (2026-10-20)
 
 How the game keeps them [static, checked on the test save]: gestures are no inventory items and no
