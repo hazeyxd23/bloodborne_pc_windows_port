@@ -1832,6 +1832,8 @@ std::string DescribeKillEchoGates(u64 chr) {
     return b;
 }
 
+bool ChrHasLevelSync(u64 chr) { return chr && HasEffect(chr, levelsync::kLevelSyncEffect); }
+
 int EnemyHp(u64 chr) {
     const u64 dm = Field<u64>(Field<u64>(chr, 0x3b0), 0x20);
     return dm ? Field<int>(dm, 0xf8, -1) : -1;
