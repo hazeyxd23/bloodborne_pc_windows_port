@@ -29,8 +29,11 @@
 #include "party_director.h"
 #include "party_droproll.h"
 #include "party_flow.h"
+#include "party_guestsvc.h"
 #include "party_link.h"
 #include "party_npc_mirror.h"
+#include "party_phantom.h"
+#include "party_start.h"
 #include "party_rot_rules.h"
 #include "party_status.h"
 #include "party_travel.h"
@@ -760,7 +763,40 @@ Rules FromSettings() {
     r.rot_cleanse_boss = v.party_rot_cleanse_boss;
     r.rot_cleanse_killer = v.party_rot_cleanse_killer;
     r.rot_cleanse_echoes = v.party_rot_cleanse_echoes;
+    // 0.7.4 session rules (party_balance_rules.h): live ones from bbport.ini (env overrides in),
+    // the ones read once at start as their modules took them (StartupSessionRules).
+    r.open_world = v.party_open_world;
+    r.guest_revive_inplace = v.party_guest_revive_inplace;
+    r.guest_respawn = v.party_guest_respawn;
+    r.guest_refill = v.party_guest_refill;
+    r.chalice_rejoin = v.party_chalice_rejoin;
+    r.story_mirror = v.party_story_mirror;
+    const StartupRules st = StartupSessionRules();
+    r.guest_lamps = st.guest_lamps;
+    r.guest_mark = st.guest_mark;
+    r.full_rewards = st.full_rewards;
     return Clamped(r);
+}
+
+StartupRules StartupSessionRules() {
+    // As the modules read them at start: seamless_rules' Hunter's Mark rows and party_items' parity
+    // patches the env BbSettings::Load exported (on unless "0"), party_phantom's boss Insight,
+    // party_director's start mode, party_guestsvc's lamps (its own startup value).
+    const auto env_on = [](const char* name) {
+        const char* e = std::getenv(name);
+        return !(e && e[0] == '0');
+    };
+    static const StartupRules once = [&] {
+        StartupRules r;
+        r.guest_lamps = coop::GuestLampsAtStart();
+        r.guest_mark = env_on("BB_PARTY_GUEST_MARK");
+        r.full_rewards = env_on("BB_PARTY_FULL_REWARDS");
+        const coop::InsightMode m = coop::InsightModeFromString(std::getenv("BB_PARTY_GUEST_INSIGHT"));
+        r.guest_insight = m == coop::InsightMode::Full ? 1 : m == coop::InsightMode::Off ? 2 : 0;
+        r.start_immediate = coop::ParseStartMode(std::getenv("BB_PARTY_START")) == coop::StartMode::Immediate;
+        return r;
+    }();
+    return once;
 }
 
 bool HostRules(Rules* out) {
@@ -1452,6 +1488,18 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::RotCleanseBoss, r.rot_cleanse_boss);
     party::status::SetHostRule(party::status::HostRule::RotCleanseKiller, r.rot_cleanse_killer);
     party::status::SetHostRule(party::status::HostRule::RotCleanseEchoes, r.rot_cleanse_echoes);
+    {   // 0.7.4 session rules: the host's on a guest (each module reads HostRuleOn).
+        using HR = party::status::HostRule;
+        party::status::SetHostRule(HR::OpenWorld, r.open_world);
+        party::status::SetHostRule(HR::GuestReviveInplace, r.guest_revive_inplace);
+        party::status::SetHostRule(HR::GuestRespawn, r.guest_respawn);
+        party::status::SetHostRule(HR::GuestRefill, r.guest_refill);
+        party::status::SetHostRule(HR::ChaliceRejoin, r.chalice_rejoin);
+        party::status::SetHostRule(HR::StoryMirror, r.story_mirror);
+        party::status::SetHostRule(HR::GuestLamps, r.guest_lamps);
+        party::status::SetHostRule(HR::GuestMark, r.guest_mark);
+        party::status::SetHostRule(HR::FullRewards, r.full_rewards);
+    }
     {   // D7 for the menus' read-only lines on a guest (the host's values once they came).
         const int scaling[party::status::kScalingValues] = {r.boss_hp,  r.boss_damage,  r.boss_poise,
                                                             r.enemy_hp, r.enemy_damage, r.enemy_poise};
