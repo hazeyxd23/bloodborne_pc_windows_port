@@ -422,3 +422,17 @@ flags 11 of 11 + both weapons, `+52.334 lamp warp to 2102961 (the host's last la
 arrived`, `+69.328` summoned (role 6, load mode 1). Restart (`check: late joiner after restart`):
 "the own save is past the prologue: nothing to catch up", own save `12410000=1 9401=1 12101020=1
 12417810=1 12401800=1 12411800=1`, summoned again at +45.6 s; `user\savedata` (solo) untouched.
+
+## 10. Skip the prologue (0.7.5)
+
+`StartMode::SkipPrologue` (`BB_PARTY_START=skip_prologue`, or the host rule `party_skip_prologue`;
+`SkipPrologueOn` in party_director.cpp: on a guest the host's rule once it arrived). Readiness is as
+prologue_solo. The late joiner catch-up machine (section 9) runs with `CatchupInput::self_skip` and no host
+needed, any role: skip a playing opening (the game's remo skip), steady 3 s, then the section 8 flag set
+(`PrologueSkipFlags`: 12410000, 9402, 9401, 12417810, 72101000, 72101011, 12101020, 12101021, 12100105,
+9404, 9180 OFF), the starting weapons 7000000 / 14000000 (the Dream messengers' price-0 shop rows 2000 /
+2010: no choice, a stated default), Iosefka's Blood Vial (goods 23000, her talk's gift), a save request,
+the lamp warp to 2412951 (Central Yharnam). Only a NEW character: step Opening or Clinic (9401 OFF); the
+first Dream visit or later ends the machine untouched. The title resets it for the next character.
+Live (two fresh characters, the test aid driver only creating them): host and guest both "skip prologue
+... 11 of 11 written", weapons and vial given, warp, READY, the guest summoned.
