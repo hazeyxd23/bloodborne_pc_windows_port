@@ -903,6 +903,34 @@ Live (2 loopback instances, default save, `BB_PARTY_START=immediate`):
 Unit tests: party-items-test (`test_deny`, gift_up tests), party-start-test
 (`test_weapon_repair`), party-worldact-test (categories, world actions).
 
+### 10.9 Key-item and questline treasure goes to everyone (0.7.5)
+
+Report (a player, 2026-10-23): Gascoigne's daughter was killed by the pig in the sewer, the host took
+the Red Jeweled Brooch and the Red Messenger Ribbon, the friends never got them. Host log: `host flag
+52410920: map treasure, per player (guests pick up their own)`. Root cause: `InstancedTreasureFlag`
+(D4) makes every host pickup of a map-treasure flag 5AABZnnn (area != 0, not captured by the award
+hook) per player, except a hand list of 8 progression keys. But these spots only exist after
+host-world state (the daughter's death, a brainsucker's drop), so a guest's own world never offers them.
+An audit of ItemLotParam against EquipParamGoods found 21 more key / quest treasure lots per player.
+
+Fix: `item_tool.py gen-inc` writes `ITEM_SHARED_TREASURE(lot, catchup, note)` rows (party_items.inc):
+every non-Chalice map-treasure lot with a goods slot of goodsType 1 (key item, unique, maxNum 1)
+plus `SHARED_QUEST_LOTS` (the daughter's 2410900 White Messenger Ribbon, 2410910 Red Messenger Ribbon,
+2410920 Red Jeweled Brooch: goodsType differs). 30 lots; `SharedKeyTreasureLot` reads the table, so
+`InstancedTreasureFlag`, `GuestGiftShareable` (a guest's pickup of one goes up to the host and out to
+the others) and the full list on a rejoin all treat them as global. The badges (Saw / Old / Radiant
+Sword / Cosmic Eye Watcher), messenger decorations, Orphanage Key, Laurence's Skull, Astral Clocktower
+Key, Queenly Flesh and the like are shared too: they are unique, so sharing is harmless, and
+sharing keeps the shop unlocks and quest gates equal for everyone. Duplicates: 6.2 applies as before
+(the lot's flag in the guest's own pool, a unique item held = `Owned`, skipped with the flag set), so
+the guest's own spot disappears after the grant; a second lot of the same goods (Old Hunter Badge
+2100500 / 2110015) is skipped as held. `ItemGrantFromPeerAllowed` accepts the rows because the lots
+are in ITEM_LOT_FLAG. The key catch-up (`KeyCatchupLots`: flag set, key missing in the own save ->
+given again) stays on the 8 progression keys (`catchup` 1): quest items can be handed in, and are
+not re-given. `BB_PARTY_SHARED_TREASURE=0` (testing): the old per-player rule. Ordinary treasure
+stays per player. Test: tests/test_party_items.cpp, smoke phase `ie` (host flags 52420900 (Orphanage Key) shared,
+52410140 per player).
+
 ## 11. Gestures (2026-10-20)
 
 How the game keeps them [static, checked on the test save]: gestures are no inventory items and no
@@ -951,3 +979,37 @@ in any world. r4 (same fixtures, screenshots of the menus while summoned): the g
 (touchpad, Triangle) ends with "Make Contact" and "League Oath" on the guest and on the host; the
 guest's Inventory > Key Items tab shows "Spark Hunter Badge", held 1 / 1, while it is summoned.
 Unit tests: `party-gestures-test` (ids and taught flags, JSON, entries, the owed store, the decision).
+
+## 11. Key and unique items only (0.7.5)
+
+Policy (user decision 2026-10-23, after the "items replaced" reports): the party shares **key items and
+unique items** only. A lot is shared when one of its rows (the lot and its continuation rows lot+1, +2 ...)
+gives a goods item with `goodsType` 1 or `maxNum` 1, or a weapon / armor / ring. Everything else
+(consumables, repeatable stacks, blood gems) is per player: never broadcast, never in the catch-up list,
+never taken from the host.
+
+* `tools/party/item_tool.py gen-inc` writes `ITEM_UNSHARED(lot)` (929 lots: flagged lots and flagless awards
+  that give nothing shareable; `ItemLotUnshared`, folded into `ItemLotDenied`). The 30 `ITEM_SHARED_TREASURE`
+  lots stay shared whatever the rule says. The guest also refuses an unshared lot from an older host (`GuestItems::Offer`).
+* Ledger indices never move (the guest's bit is `60009000 + idx`). A dropped lot loses its `ITEM_LEDGER` row and
+  the table keeps `// retired ledger lot L (index I stays reserved)`; the generator reads those comments back, so the
+  index is never reused. Retired: 15005 22000 24000-24050 26000-26030 27000-27060 29000 32000 35000 3401802 3401852
+  21002950 22502610 25700000 25700005 50700000 50800005 51001900 75002400 75002405. Kept (unique goods, armor):
+  14000 15000 21000 23000 (Iosefka's Blood Vial, maxNum 1) 30000 31000 39000 50000001 50000010 50800000.
+* The host's catch-up list (`full`) given while summoned is **quiet**: no spacing, no popup hold, no item-get box per
+  item (the 8 s spacing of `GuestItems::kSpacing` only exists so one native box is open at a time), and one notice
+  "Received N items from the party" 1.5 s after the last. At home the native award still shows its box, so the
+  spacing stays there.
+
+### 11.1 Messenger shop gates
+
+`ShopLineupParam.qwcId` is an event flag. `tools/party/shop_gates.py` (output: `docs/party/shop_gates.md`) lists every
+gate with what sets it. Classes: **progress** (Gascoigne's / Henryk's / Djura's attire 5910-5914, the blood stones
+5901-5904, the NPC weapon shops 12101000-12101009): C2 shares them (`world_state` set-only, `npc_quest` follow);
+**item** (the owner picked it up: chalice-lot pickup flags 5000-5282, "owns the Uncanny / Lost weapon" 5500-5521,
+the personal block 6000-8999, the chalice root unlocks): per player. The 5500-5521 flags are the completion flags of
+common event 5500+slot (param = the weapon id, `rest` 1): the event ends at once when the player's chr type is not 0,
+and the completion write set all 22 in the guest's host-world overlay (the guest logs list them as "local flag
+differences held back as the baseline"). `ShopGateTick` (party_items.cpp) makes the overlay show the own save's value
+while summoned (like D4 does for the item_lot_picked bits).
+

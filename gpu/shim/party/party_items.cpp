@@ -88,6 +88,13 @@ constexpr AwardSpot kAwardSpots[] = {
 #undef ITEM_AWARD_SPOT
 };
 
+// Generated (item_tool.py gen-inc), sorted: lots with no key / unique item (party policy 0.7.5).
+constexpr std::int32_t kUnsharedLots[] = {
+#define ITEM_UNSHARED(lot) lot,
+#include "party_items.inc"
+#undef ITEM_UNSHARED
+};
+
 struct SourceName {
     ItemSource source;
     const char* name;
@@ -112,6 +119,9 @@ const std::unordered_map<std::int32_t, std::int32_t>& FlagToLot() {
 }
 
 constexpr std::int32_t kTreasureBase = 50000000;
+// Common event 5500+slot's completion flags: "the player owns Uncanny / Lost weapon X" (the shop's gates).
+constexpr std::int32_t kShopOwnFirst = 5500;
+constexpr std::int32_t kShopOwnLast = 5521;
 
 bool InRange(std::int32_t v, std::int32_t lo, std::int32_t hi) {
     return v >= lo && v <= hi;
@@ -212,15 +222,17 @@ std::vector<std::uint32_t> LedgerBitsToSeed(const std::function<bool(std::uint32
     return out;
 }
 
-constexpr std::int32_t kSharedKeyTreasureLots[] = {
-    2400450,  // Hunter Chief Emblem (Cathedral Ward; the plaza gate 12400760)
-    2800290,  // Upper Cathedral Key (Yahar'gul; ObjAct 2400100)
-    2600550,  // Iron Door Key (Nightmare of Mensis; ObjAct 2600020/2600021)
-    2600610,  // Iron Door Key (second copy)
-    3200720,  // Lecture Theatre Key (Byrgenwerth; ObjAct 3200030)
-    3500800,  // Underground Cell Key (Research Hall; ObjAct 3500040)
-    2200360,  // Rune Workshop Tool (Hemwick; the Memory Altar)
-    2411000,  // Blood Gem Workshop Tool (Central Yharnam; blood gems at the workbench)
+struct SharedTreasure {
+    std::int32_t lot;
+    std::int32_t catchup;  // 1: KeyCatchupLots re-gives it
+    const char* note;
+};
+// Generated (item_tool.py gen-inc): key-item and questline map treasure the host's pickup gives
+// to every member (docs/party/items.md 10.9).
+constexpr SharedTreasure kSharedTreasure[] = {
+#define ITEM_SHARED_TREASURE(lot, catchup, note) {lot, catchup, note},
+#include "party_items.inc"
+#undef ITEM_SHARED_TREASURE
 };
 
 std::vector<std::int32_t> KeyCatchupLots(const std::function<bool(std::uint32_t)>& own_flag,
@@ -240,11 +252,12 @@ std::vector<std::int32_t> KeyCatchupLots(const std::function<bool(std::uint32_t)
     // The shared progression keys / workshop tools found as treasure: picked up (or replayed)
     // while summoned, their flag reached the own save but the key did not (the guest's save had
     // 52411000, the Blood Gem Workshop Tool's, and no tool); the corpse never offers it again.
-    for (const std::int32_t lot : kSharedKeyTreasureLots) {
-        const std::int32_t flag = ItemLotFlag(lot);
-        if (flag > 0 && own_flag(static_cast<std::uint32_t>(flag)) &&
-            std::find(out.begin(), out.end(), lot) == out.end()) {
-            out.push_back(lot);
+    // Only the progression keys / workshop tools (catchup 1): quest items may have been handed in.
+    for (const SharedTreasure& t : kSharedTreasure) {
+        const std::int32_t flag = ItemLotFlag(t.lot);
+        if (t.catchup && flag > 0 && own_flag(static_cast<std::uint32_t>(flag)) &&
+            std::find(out.begin(), out.end(), t.lot) == out.end()) {
+            out.push_back(t.lot);
         }
     }
     return out;
@@ -328,6 +341,10 @@ bool ChaliceGrantAccepted(bool summoned, std::uint32_t map_id) {
     return summoned && map_id != 0xffffffffu && (map_id >> 24) == 29;
 }
 
+bool ItemLotUnshared(std::int32_t lot) {
+    return std::binary_search(std::begin(kUnsharedLots), std::end(kUnsharedLots), lot);
+}
+
 bool ItemLotDenied(std::int32_t lot, std::int32_t flag) {
     if (lot <= 0 || lot >= 100000000) {
         return true; // unresolved; Chalice Dungeon lots (1100xxxxx, 2001xxxxx)
@@ -354,6 +371,12 @@ bool ItemLotDenied(std::int32_t lot, std::int32_t flag) {
         return false;
     }
     if (InRange(flag, 6000, 8999)) {
+        return true;
+    }
+    // Party policy (0.7.5): only key items and unique items are shared. A lot of consumables and
+    // repeatable stacks stays with the player who found it (never broadcast, replayed or listed
+    // in the catch-up).
+    if (ItemLotUnshared(lot)) {
         return true;
     }
     switch (lot) {
@@ -417,8 +440,19 @@ std::optional<ItemGrant> ClassifyFlag(std::int32_t flag, const std::map<std::int
 }
 
 bool SharedKeyTreasureLot(std::int32_t lot) {
-    return std::find(std::begin(kSharedKeyTreasureLots), std::end(kSharedKeyTreasureLots), lot) !=
-           std::end(kSharedKeyTreasureLots);
+    static const bool off = [] {
+        const char* v = std::getenv("BB_PARTY_SHARED_TREASURE");
+        return v && v[0] == '0' && !v[1];
+    }();  // test switch: the old per-player rule
+    if (off) {
+        return false;
+    }
+    for (const SharedTreasure& t : kSharedTreasure) {
+        if (t.lot == lot) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool InstancedTreasureFlag(std::int32_t flag, bool instanced, bool captured) {
@@ -1194,6 +1228,11 @@ std::size_t GuestItems::Offer(const std::vector<ItemGrant>& items) {
         if (key < 0 || done_.count(key)) {
             continue;
         }
+        // An older host may still send consumables (party policy 0.7.5: key / unique items only).
+        if ((g.source == ItemSource::Award || g.source == ItemSource::Flag || g.source == ItemSource::Full) &&
+            ItemLotUnshared(g.lot)) {
+            continue;
+        }
         if (g.source == ItemSource::Mark) {
             if (q_.size() >= kMaxQueue) {
                 continue;
@@ -1243,8 +1282,11 @@ std::optional<ItemGrant> GuestItems::Step(const ItemApplyState& s, double now) {
             return std::nullopt;
         }
     }
-    // Marks only set a flag (no popup / notice): no spacing for them.
-    if (it->source != ItemSource::Mark) {
+    // Marks only set a flag (no popup / notice): no spacing for them. A host catch-up grant given
+    // while summoned is a quiet give too (no item-get dialog, one summary notice for the batch):
+    // the spacing and the popup holds only exist for the dialogs.
+    last_quiet_ = it->source == ItemSource::Full && mode == ItemApplyMode::Summoned;
+    if (it->source != ItemSource::Mark && !last_quiet_) {
         if (now - last_apply_ < kSpacing) {
             return std::nullopt; // one popup / notice at a time
         }
@@ -2564,7 +2606,7 @@ enum class SummonedResult { Given, Skipped, Defer };
 /// is already set, so 0x17DDC50 would roll nothing): the lot's items go straight into the own
 /// inventory (GiveItemDirect 0x131CB70, no popup) and its flags / ledger bit into the own save's
 /// pool (C2's mode-1 pool write). Nothing is written to the overlay.
-SummonedResult ApplySummoned(const ItemGrant& g) {
+SummonedResult ApplySummoned(const ItemGrant& g, bool quiet) {
     const std::int64_t done = g.DoneFlag();
     if (g.source == ItemSource::Mark) {
         const bool was = OwnSaveFlag(done);
@@ -2751,7 +2793,7 @@ SummonedResult ApplySummoned(const ItemGrant& g) {
         const bool ok = via_list || GiveItem(bits, static_cast<u32>(it.id), it.count);
         const int after = ItemCount(bits, static_cast<u32>(it.id));
         // The game's own "item acquired" dialog entry, as the host's lot award shows it.
-        const bool shown = via_list || (ok && ShowItemGet(bits, static_cast<u32>(it.id), it.count));
+        const bool shown = via_list || (ok && !quiet && ShowItemGet(bits, static_cast<u32>(it.id), it.count));
         LotSlotState noted;
         noted.category = it.category;
         noted.id = it.id;
@@ -2768,7 +2810,7 @@ SummonedResult ApplySummoned(const ItemGrant& g) {
         }
         std::snprintf(b, sizeof b, "%s %d x%d (held %d -> %d%s%s%s)", CategoryWord(it.category), it.id, it.count,
                       before, after, ok ? "" : ", GiveItemDirect unavailable", room,
-                      !ok ? "" : shown ? ", item-get dialog" : ", NO item-get dialog");
+                      !ok ? "" : shown ? ", item-get dialog" : quiet ? ", no dialog (catch-up batch)" : ", NO item-get dialog");
         given += (given.empty() ? "" : "; ") + std::string(b);
         std::snprintf(b, sizeof b, "%s %d x%d", CategoryWord(it.category), it.id, it.count);
         notice += (notice.empty() ? "" : ", ") + std::string(b);
@@ -2788,7 +2830,7 @@ SummonedResult ApplySummoned(const ItemGrant& g) {
     if (gave == 0) {
         return SummonedResult::Skipped;
     }
-    if (native < gave) {
+    if (native < gave && !quiet) {
         // Fallback only: the native dialog could not be queued for some item.
         party::status::SetLastEvent("Party item received: " + notice);
     }
@@ -3618,8 +3660,8 @@ void KeyGoodsWatchTick(const GameSnapshot& gs, int load_mode, double now) {
     for (const LedgerRow& r : kLedger) {
         add(r.lot);
     }
-    for (const std::int32_t lot : kSharedKeyTreasureLots) {
-        add(lot);
+    for (const SharedTreasure& t : kSharedTreasure) {
+        add(t.lot);
     }
     if (held.empty()) {
         return;
@@ -3664,9 +3706,60 @@ void KeyGoodsWatchTick(const GameSnapshot& gs, int load_mode, double now) {
     baseline = true;
 }
 
+// ---- the guest's shop gates while summoned (0.7.5) ----
+// The messenger shop lists the Uncanny / Lost weapons of ShopLineupParam rows gated by the event
+// flags 5500-5521 (docs/party/shop_gates.md). Their setter is common event 5500+slot, "the player
+// owns weapon X": it runs for the chr type of the player and ends at once for anyone else. For a
+// summoned guest (a phantom in the host's world) it ends at once, and the completion write sets
+// all 22 flags in the host-world overlay, so the guest's shop listed every Uncanny / Lost weapon
+// (playtest 2026-10-23, guest logs: "5500=1 ... 5521=1" among the local flag differences). The
+// flags mean "this player obtained it": the overlay shows the own save's value, like the other
+// item_lot_picked bits of the overlay (D4).
+void ShopGateTick(const GameSnapshot& gs, int load_mode, double now) {
+    static double next = 0.0;
+    static int fixed_total = 0;
+    static bool off = std::getenv("BB_PARTY_SHOP_GATES") && std::string(std::getenv("BB_PARTY_SHOP_GATES")) == "0";
+    if (off || load_mode != 1 || gs.session_role != RoleClient || !gs.world_up || now < next) {
+        return;
+    }
+    next = now + 0.5;
+    const u64 man = Ptr(kFlagMan);
+    if (!man) {
+        return;
+    }
+    std::string fixed;
+    for (std::int32_t f = kShopOwnFirst; f <= kShopOwnLast; ++f) {
+        bool own = false;
+        if (!progress::ReadFlagOwnSave(static_cast<u32>(f), &own)) {
+            return;  // the own pool is not readable now: leave everything as it is
+        }
+        if (IsFlag(man, f) != own) {
+            SetFlag(man, f, own);
+            fixed += (fixed.empty() ? "" : ",") + std::to_string(f) + (own ? "=1" : "=0");
+        }
+    }
+    if (!fixed.empty() && fixed_total < 40) {
+        fixed_total++;
+        Log("shop gates while summoned: the host-world overlay shows the own save's 'owns the weapon' flags: %s",
+            fixed.c_str());
+    }
+}
+
+int g_batch_n = 0;         // quiet catch-up gives since the last summary notice
+double g_batch_last = 0.0;  // when the last one landed
+
 void ItemsTick() {
     if (!g_on.load()) {
         return;
+    }
+    if (g_batch_n > 0 && Now() - g_batch_last >= 1.5) {
+        // One notice for the whole host catch-up instead of one item-get dialog per item.
+        char b[96];
+        std::snprintf(b, sizeof b, g_batch_n == 1 ? "Received %d item from the party" : "Received %d items from the party",
+                      g_batch_n);
+        Log("catch-up batch: %d item grant(s) given quietly: %s", g_batch_n, b);
+        party::status::SetLastEvent(b);
+        g_batch_n = 0;
     }
     ItemGetProbe();
     if (!g_test_offered && !g_test.empty()) {
@@ -3690,6 +3783,7 @@ void ItemsTick() {
     s.boss_quiet = BossQuiet(Now());
     s.game_dialog = gs.world_up && split::DialogUp();
     ItemGetWatchTick(gs, Now());
+    ShopGateTick(gs, s.load_mode, Now());
     KeyGoodsWatchTick(gs, s.load_mode, Now());
     SummonedGivesTick(gs, s.load_mode, Now());
     KeyCatchupTick(gs, s.load_mode, Now());
@@ -3742,7 +3836,12 @@ void ItemsTick() {
         return;
     }
     if (mode == ItemApplyMode::Summoned) {
-        const SummonedResult r = ApplySummoned(*g);
+        const bool quiet = g->source == ItemSource::Full;
+        const SummonedResult r = ApplySummoned(*g, quiet);
+        if (quiet && r == SummonedResult::Given) {
+            g_batch_n++;
+            g_batch_last = Now();
+        }
         std::lock_guard<std::mutex> lk(g_guest_mu);
         if (r == SummonedResult::Defer && g->source == ItemSource::Chalice) {
             // A dungeon award is for the dungeon: never carried home.
@@ -3752,7 +3851,7 @@ void ItemsTick() {
             return;
         }
         g_guest.Done(g->Key());
-        if (r == SummonedResult::Given) {
+        if (r == SummonedResult::Given && !quiet) {
             g_guest.Awarded(Now());
         }
         return;

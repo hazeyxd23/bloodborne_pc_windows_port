@@ -2006,7 +2006,7 @@ __attribute__((noinline)) void TraceWatchedWrite(const char* via, u64 man, u32 i
         len += std::snprintf(callers + len, sizeof callers - std::size_t(len), " 0x%llx", static_cast<unsigned long long>(v - base));
         ++n;
     }
-    std::printf("Party progress: watched flag write %u = %u via %s (%s manager); stack:%s\n", id, on, via,
+    std::printf("[coop] Party progress: watched flag write %u = %u via %s (%s manager); stack:%s\n", id, on, via,
                 man == 0 ? "no" : "a", callers);
     std::fflush(stdout);
 }
