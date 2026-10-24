@@ -111,7 +111,7 @@
 {72100113u, 72100113u, Category::never_sync, "per-player: Doll talk t210304 state after a level-up"},
 {72100202u, 72100202u, Category::never_sync, "per-player: the Dream mirror t210696 one-time note ('Wear clothing to change appearance.')"},
 {12101020u, 12101021u, Category::never_sync, "per-player: starting weapon messengers done (m21 events 12101020 / 12101021; the pick is each player's own)"},
-// ---- 1727 specific rows
+// ---- 1728 specific rows
 {2200u, 2200u, Category::boss_defeated, "set by m22_00_00_00 ev 12201800 (boss defeat)"},
 {2300u, 2301u, Category::boss_defeated, "set by m23_00_00_00 ev 12301800 (boss defeat) (+1 more)"},
 {2400u, 2402u, Category::boss_defeated, "set by m24_00_00_00 ev 12401800 (boss defeat)"},
@@ -135,6 +135,7 @@
 {5033u, 5033u, Category::item_lot_picked, "ItemLotParam.getItemFlagId row 80539000"},
 {5050u, 5053u, Category::item_lot_picked, "ItemLotParam.getItemFlagId row 80309020 (+3 more)"},
 {5060u, 5060u, Category::item_lot_picked, "ItemLotParam.getItemFlagId row 80429020"},
+{5090u, 5091u, Category::world_state, "shop gate (ShopLineupParam 200060): progress without an item lot, shared set-only (+1 more)"},
 {5100u, 5114u, Category::item_lot_picked, "ItemLotParam.getItemFlagId row 200100000 (+14 more)"},
 {5120u, 5134u, Category::item_lot_picked, "ItemLotParam.getItemFlagId row 200200000 (+14 more)"},
 {5140u, 5154u, Category::item_lot_picked, "ItemLotParam.getItemFlagId row 200210000 (+14 more)"},
