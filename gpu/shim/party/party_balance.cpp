@@ -750,6 +750,7 @@ Rules FromSettings() {
     r.kill_record = v.party_kill_record;
     r.npc_mirror = v.party_npc_mirror;
     r.npc_fights = v.party_npc_fights;
+    r.skip_prologue = v.party_skip_prologue;
     r.any_kidnap = v.party_any_kidnap;
     r.level_sync = v.party_level_sync;
     r.phantom_hp = v.party_phantom_hp;
@@ -1441,6 +1442,7 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     party::status::SetHostRule(party::status::HostRule::KillRecord, r.kill_record);
     party::status::SetHostRule(party::status::HostRule::NpcMirror, r.npc_mirror);
     party::status::SetHostRule(party::status::HostRule::NpcFights, r.npc_fights);
+    party::status::SetHostRule(party::status::HostRule::SkipPrologue, r.skip_prologue);
     party::status::SetHostRule(party::status::HostRule::AnyKidnap, r.any_kidnap);
     party::status::SetHostRule(party::status::HostRule::LevelSync, r.level_sync);
     party::status::SetHostRule(party::status::HostRule::PhantomHp, r.phantom_hp);
