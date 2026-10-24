@@ -1005,7 +1005,8 @@ never taken from the host.
 
 `ShopLineupParam.qwcId` is an event flag. `tools/party/shop_gates.py` (output: `docs/party/shop_gates.md`) lists every
 gate with what sets it. Classes: **progress** (Gascoigne's / Henryk's / Djura's attire 5910-5914, the blood stones
-5901-5904, the NPC weapon shops 12101000-12101009): C2 shares them (`world_state` set-only, `npc_quest` follow);
+5901-5904, the NPC weapon shops 12101000-12101009, the Chalice boss unlocks 5090 Bone Ash / 5091 Madman): C2 shares them
+(`world_state` set-only, `npc_quest` follow);
 **item** (the owner picked it up: chalice-lot pickup flags 5000-5282, "owns the Uncanny / Lost weapon" 5500-5521,
 the personal block 6000-8999, the chalice root unlocks): per player. The 5500-5521 flags are the completion flags of
 common event 5500+slot (param = the weapon id, `rest` 1): the event ends at once when the player's chr type is not 0,
@@ -1013,3 +1014,14 @@ and the completion write set all 22 in the guest's host-world overlay (the guest
 differences held back as the baseline"). `ShopGateTick` (party_items.cpp) makes the overlay show the own save's value
 while summoned (like D4 does for the item_lot_picked bits).
 
+
+**0.7.6 (Bone Ash set only on the host)**: 5090 / 5091 are set by map-wide event 12906824 ("dedicated flag on a boss
+defeat", m29.emevd, called with the boss flag and the shop flag by m29_20_90_00 / m29_31_90_00, the Chalice layer
+bosses). They lie in the global item-lot range 5000-5299 (`item_lot_picked`), which only C3's lot replay delivers,
+and no ItemLotParam row carries them, so the guest never got them. `flag_tool.py gen-inc` now emits a `world_state`
+row for every `ShopLineupParam.qwcId` that has no lot, is not 5500-5521 / 6000-8999 and is not a chalice runtime
+flag (type 9), so a future gate is covered by regenerating. `shop_gates.py` resolves calls across EMEVD files
+(`expand_all(cross_map=True)`; not used for the flag table, it would re-file the chalice layer flags), prints
+"NOT SYNCED" for a `progress` gate whose category C2 does not share and `--check` makes that an exit code. The
+Sinister Root Chalice gates 92905385-92905389 are engine-set per dungeon (chalice type 9 groups, never written from
+outside) and stay out of scope.

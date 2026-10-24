@@ -15,8 +15,8 @@ Class: `progress` = shared with the party, `item` = per player (the item was obt
 | 5007 | item_lot_picked | item | 10 rows (100010..) | Ritual Blood (3) (goods 7002), Tomb Mold (3) (goods 7022) | pickup flag of item lot(s) 80409010 |
 | 5009 | item_lot_picked | item | 5 rows (200015..) | Pearl Slug (goods 7100) | pickup flag of item lot(s) 80000300 |
 | 5053 | item_lot_picked | item | 10 rows (100011..) | Ritual Blood (4) (goods 7003), Tomb Mold (4) (goods 7023) | pickup flag of item lot(s) 80509010 |
-| 5090 | item_lot_picked | progress | 20 rows (200060..) | Bone Ash Mask (armor 40000), Bone Ash Armor (armor 41000), Bone Ash Gauntlets (armor 42000), Bone Ash Leggings (armor 43000) | no setter found |
-| 5091 | item_lot_picked | progress | 20 rows (200064..) | Madman Hood (armor 210000), Madman Garb (armor 211000), Madman Manchettes (armor 212000), Madman Leggings (armor 213000) | no setter found |
+| 5090 | world_state | progress | 20 rows (200060..) | Bone Ash Mask (armor 40000), Bone Ash Armor (armor 41000), Bone Ash Gauntlets (armor 42000), Bone Ash Leggings (armor 43000) | m29 event 12906824 slot 0 sets |
+| 5091 | world_state | progress | 20 rows (200064..) | Madman Hood (armor 210000), Madman Garb (armor 211000), Madman Manchettes (armor 212000), Madman Leggings (armor 213000) | m29 event 12906824 slot 0 sets |
 | 5100 | item_lot_picked | item | 5 rows (100101..) | Uncanny Saw Cleaver (wpn 7010000) | pickup flag of item lot(s) 200100000 |
 | 5120 | item_lot_picked | item | 5 rows (100110..) | Uncanny Saw Spear (wpn 7110000) | pickup flag of item lot(s) 200200000 |
 | 5121 | item_lot_picked | item | 5 rows (100107..) | Uncanny Threaded Cane (wpn 22010000) | pickup flag of item lot(s) 200200010 |
