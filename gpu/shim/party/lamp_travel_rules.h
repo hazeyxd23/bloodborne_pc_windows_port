@@ -215,4 +215,14 @@ private:
     std::size_t count_ = 0;
 };
 
+/// 0.7.6 (a guest who talked to a window resident near a lamp sat down at the lamp and got its travel
+/// list): a guest's lamp answers "client" (stays shut) while the guest's own NPC conversation is on - its
+/// talk playing, the item-get box of its gift - and for this many seconds after. The player's OK press of
+/// that box and the next Cross presses (a player mashes the button) must not start a lamp in reach.
+inline constexpr double kGuestLampAfterTalkGrace = 1.5;
+
+/// A guest's world lamp may answer IsClientPlayer 0 (open) only when its conversation (talk or item box)
+/// is not on and did not end within the grace. `talk_idle_s`: seconds since it was last on (0: on now).
+constexpr bool GuestLampMayOpen(double talk_idle_s) { return talk_idle_s >= kGuestLampAfterTalkGrace; }
+
 } // namespace coop::lamptravel
