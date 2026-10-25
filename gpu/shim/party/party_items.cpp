@@ -103,6 +103,7 @@ constexpr SourceName kSourceNames[] = {
     {ItemSource::Unknown, "unknown"}, {ItemSource::Award, "award"}, {ItemSource::Flag, "flag"},
     {ItemSource::Full, "full"},       {ItemSource::Mark, "mark"},   {ItemSource::Test, "test"},
     {ItemSource::Own, "own"},         {ItemSource::Repeat, "repeat"}, {ItemSource::Chalice, "chalice"},
+    {ItemSource::BossDrop, "boss"},
 };
 
 const std::unordered_map<std::int32_t, std::int32_t>& FlagToLot() {
@@ -389,6 +390,46 @@ std::optional<ItemGrant> MakeChaliceGrant(std::int32_t lot, const std::vector<Gr
     return g;
 }
 
+namespace {
+struct BossDropRow {
+    std::int32_t lot;
+    int area;
+};
+constexpr BossDropRow kBossDrops[] = {
+#define ITEM_BOSS_DROP(lot, area, note) {lot, area},
+#include "party_items.inc"
+#undef ITEM_BOSS_DROP
+};
+}  // namespace
+
+int BossDropArea(std::int32_t lot) {
+    for (const BossDropRow& r : kBossDrops) {
+        if (r.lot == lot) {
+            return r.area;
+        }
+    }
+    return -1;
+}
+
+std::optional<ItemGrant> MakeBossDropGrant(std::int32_t lot, const std::vector<GrantItem>& items, std::uint64_t n) {
+    if (BossDropArea(lot) < 0 || items.empty() || items.size() > kMaxGrantItems) {
+        return std::nullopt;
+    }
+    ItemGrant g;
+    g.lot = lot;
+    g.flag = kItemNone;
+    g.ledger = kItemNone;
+    g.source = ItemSource::BossDrop;
+    g.items = items;
+    g.repeat_key = kBossDropKeyBase + static_cast<std::int64_t>(n);
+    return g;
+}
+
+bool BossDropAccepted(bool summoned, std::uint32_t map_id, std::int32_t lot) {
+    const int area = BossDropArea(lot);
+    return summoned && area >= 0 && map_id != 0xffffffffu && static_cast<int>(map_id >> 24) == area;
+}
+
 bool ChaliceGrantAccepted(bool summoned, std::uint32_t map_id) {
     return summoned && map_id != 0xffffffffu && (map_id >> 24) == 29;
 }
@@ -603,6 +644,10 @@ bool ItemsFromJson(const json::Value& v, std::vector<ItemGrant>* out, std::strin
                 if (g.flag != kItemNone || g.ledger != kItemNone || !ChaliceAwardLot(g.lot) || row.array.size() != 6) {
                     throw std::runtime_error("items: a chalice row needs a dungeon lot, no flag and its items");
                 }
+            } else if (g.source == ItemSource::BossDrop) {
+                if (g.flag != kItemNone || g.ledger != kItemNone || BossDropArea(g.lot) < 0 || row.array.size() != 6) {
+                    throw std::runtime_error("items: a boss drop row needs a boss lot, no flag and its items");
+                }
             } else if (g.DoneFlag() < 0) {
                 throw std::runtime_error("items: a row needs a flag or a ledger index");
             }
@@ -668,6 +713,14 @@ bool ItemGrantFromPeerAllowed(const ItemGrant& g, std::string* why) {
         if (!ChaliceAwardLot(g.lot) || g.flag != kItemNone || g.ledger != kItemNone || g.items.empty() ||
             g.items.size() > kMaxGrantItems) {
             return no("a chalice award needs a dungeon lot, no flag and the host's items");
+        }
+        return true;
+    }
+    if (g.source == ItemSource::BossDrop) {
+        // 0.7.6: a world boss's lot with exactly the host's items, no flag; given only where the boss was.
+        if (BossDropArea(g.lot) < 0 || g.flag != kItemNone || g.ledger != kItemNone || g.items.empty() ||
+            g.items.size() > kMaxGrantItems) {
+            return no("a boss drop needs a boss lot, no flag and the host's items");
         }
         return true;
     }
@@ -1702,6 +1755,20 @@ std::optional<ItemGrant> AwardEntry(u64 lot_arg, u64 host_only_arg) {
         c.source = ItemSource::Chalice;
         return c;
     }
+    if (role == PartyRole::Host && own == 1 && host_only && BossDropArea(lot) >= 0 &&
+        BbSettings::Get().party_boss_drops.load() && !ClassifyAward(lot, host_only)) {
+        // 0.7.6 (bossdrops): a world boss's item drop the game keeps for the host and the key / unique
+        // rules do not share (Rom's Kin Coldblood): what the host's roll gives goes to the guests in the
+        // boss's map area now (AwardReplace fills the items). Key / unique lots take the paths above.
+        if (flag > 0) {
+            std::lock_guard<std::mutex> lk(g_host_mu);
+            g_host.Capture(flag, lot);
+        }
+        ItemGrant b;
+        b.lot = lot;
+        b.source = ItemSource::BossDrop;
+        return b;
+    }
     if (role == PartyRole::Host && own == 1) {
         const std::optional<ItemGrant> g = ClassifyAward(lot, host_only);
         {
@@ -1775,6 +1842,15 @@ BB_COOP_SYSV void AwardReplace(u64 mim, u64 lot_arg, u64 host_only_arg) {
             g_captured_bad ? std::nullopt : MakeChaliceGrant(g->lot, g_captured, ++n);
         if (!c) {
             Log("host chalice award lot %d: %s; not sent", g->lot,
+                g_captured_bad ? "an item could not be read" : g_captured.empty() ? "it gave nothing" : "too many items");
+            return;
+        }
+        g = c;
+    } else if (g->source == ItemSource::BossDrop) {
+        static std::uint64_t n = 0;
+        const std::optional<ItemGrant> c = g_captured_bad ? std::nullopt : MakeBossDropGrant(g->lot, g_captured, ++n);
+        if (!c) {
+            Log("host boss drop lot %d: %s; not sent", g->lot,
                 g_captured_bad ? "an item could not be read" : g_captured.empty() ? "it gave nothing" : "too many items");
             return;
         }
@@ -1976,6 +2052,12 @@ void HostTestTick(double now) {
     }
     if (now - g_host_test_coop < 20.0 || now - g_host_test_last < 10.0) {
         return;
+    }
+    {   // 0.7.6: a world boss's lot is awarded where the boss is (the guests present at the kill: the same map area)
+        const int area = BossDropArea(g_host_test[g_host_test_next]);
+        if (area >= 0 && (quick.map_id == 0xffffffffu || static_cast<int>(quick.map_id >> 24) != area)) {
+            return;
+        }
     }
     g_host_test_last = now;
     const std::int32_t lot = g_host_test[g_host_test_next++];
@@ -2712,11 +2794,12 @@ SummonedResult ApplySummoned(const ItemGrant& g, bool quiet) {
     const std::vector<LotRowData> chain = LotChain(g.lot);
     // A re-give ignores the row flags (the done flag is one of them and is set).
     LotPlan plan = PlanSummonedLot(chain, g.items, [](std::int32_t f) { return OwnSaveFlag(f); });
-    if (g.source == ItemSource::Chalice) {
+    if (g.source == ItemSource::Chalice || g.source == ItemSource::BossDrop) {
         // G1: exactly the host's items, never a flag (dungeon flags are the slot's own), and no
-        // key goods (a chalice reaches every member through the chalice share).
+        // key goods (a chalice reaches every member through the chalice share; a boss's key items
+        // through the key / unique rules).
         plan.result = LotPlanResult::Give;
-        plan.why = "the host's chalice award";
+        plan.why = g.source == ItemSource::Chalice ? "the host's chalice award" : "the host's boss drop";
         plan.row_flags.clear();
         plan.items.clear();
         for (const GrantItem& it : g.items) {
@@ -2726,7 +2809,7 @@ SummonedResult ApplySummoned(const ItemGrant& g, bool quiet) {
             s.num = it.count;
             FillGoodsLimits(&s);
             if (KeyGoods(s)) {
-                Log("%s: goods %d is a key item (the chalice share gives chalices); left out", DescribeItem(g).c_str(),
+                Log("%s: goods %d is a key item (shared by its own rule); left out", DescribeItem(g).c_str(),
                     it.id);
                 continue;
             }
@@ -3168,6 +3251,27 @@ void RequestGuestItems(const std::vector<ItemGrant>& in) {
     std::vector<ItemGrant> items;
     items.reserve(in.size());
     for (const ItemGrant& g : in) {
+        if (g.source == ItemSource::BossDrop) {
+            // 0.7.6: only a guest summoned into the boss's map area takes the host's boss drop (the guests at
+            // the kill); its own key (once; no flag is ever written for it).
+            static std::uint64_t nb = 0;
+            const GameSnapshot q = ReadGameState(false);
+            const bool summoned = q.session_role == RoleClient && progress::FlagLoadMode() == 1;
+            if (!BossDropAccepted(summoned, q.map_id, g.lot) ||
+                !party::status::HostRuleOn(party::status::HostRule::BossDrops)) {
+                Log("boss drop lot %d from the host: not taken (not in the boss's area at the kill: map %08x, role %d, "
+                    "rule %s)",
+                    g.lot, q.map_id, q.session_role,
+                    party::status::HostRuleOn(party::status::HostRule::BossDrops) ? "on" : "off");
+                continue;
+            }
+            ItemGrant c = g;
+            c.repeat_key = kBossDropKeyBase + static_cast<std::int64_t>(++nb);
+            Log("boss drop lot %d from the host (%zu item(s)): queued for this guest (present at the kill)", g.lot,
+                g.items.size());
+            items.push_back(c);
+            continue;
+        }
         if (g.source != ItemSource::Chalice) {
             items.push_back(g);
             continue;
@@ -3981,7 +4085,10 @@ void ItemsTick() {
             g_batch_last = Now();
         }
         std::lock_guard<std::mutex> lk(g_guest_mu);
-        if (r == SummonedResult::Defer && g->source == ItemSource::Chalice) {
+        if (r == SummonedResult::Defer && g->source == ItemSource::BossDrop) {
+            // A boss drop is for the guests at the kill: never carried home.
+            Log("%s: could not be given here; dropped (not carried home)", DescribeItem(*g).c_str());
+        } else if (r == SummonedResult::Defer && g->source == ItemSource::Chalice) {
             // A dungeon award is for the dungeon: never carried home.
             Log("%s: could not be given in the dungeon; dropped (not carried home)", DescribeItem(*g).c_str());
         } else if (r == SummonedResult::Defer) {
