@@ -1035,7 +1035,30 @@ flag (type 9), so a future gate is covered by regenerating. `shop_gates.py` reso
 (`expand_all(cross_map=True)`; not used for the flag table, it would re-file the chalice layer flags), prints
 "NOT SYNCED" for a `progress` gate whose category C2 does not share and `--check` makes that an exit code. The
 Sinister Root Chalice gates 92905385-92905389 are engine-set per dungeon (chalice type 9 groups, never written from
-outside) and stay out of scope.
+outside) and stay out of scope of the flag sync; see "Sinister Root Chalice rows for a guest with its own dungeon" below.
+
+**0.7.6 (chaliceshop): the Sinister Root Chalice rows in a host's Chalice Dungeon.** ShopLineupParam rows 5N0011-5N0015
+(N = 1..4, the Bath Messenger t290300's four shops, same rows in each) sell goods 6302 / 6312 / 6502 / 6522 / 6532, each
+gated by qwcId 92905385 .. 92905389 and sold out by the per-player flags 70009200 .. 70009240. The gate is the dungeon's
+feature "case" flag 92905300 + DungeonFeatureParam.eventflagId: feature 85 (-> 92905385, Sinister Lower Pthumeru) comes
+from the fixed sub-feature lot 998500000 of the Lower Pthumeru Chalice (6309), 86 from 6319, 87 from 6509, 88 from 6529,
+89 (-> 92905389) from 6539 (HolygrailExParam fixedSf_*, DungeonSubFeatLotParam). Type-9 flags are not in the load-mode-1
+overlay: they live in the member's own pool, in the group of the CURRENT chalice slot (the remap 0x13b89b0). A quick join
+writes the host's dungeon's flags into the quick-joined slot's group (slot 0: `94005300 + n`), so a guest without a
+dungeon of its own (current slot 0) read the host's flags and saw the row, while a guest whose own ritual dungeon is the
+current slot (1..6) read ITS dungeon's flags (Hintertomb: 92905301, 310, 345, 378) and never the host's 92905385: no
+Sinister Lower Pthumeru row (player report 2026-10-25, layer 4 of a host's Lower Pthumerian Labyrinth). Fix
+(`party_chalice.cpp`, `CaseFlagRedirect`): while the host's dungeon is quick-joined / carried, IsEventFlag (0x13cfc00) and
+GetEventFlagValue (0x13cfd80) read ids 92900000-92999999 from the quick-joined slot's group
+(`94000000 + slot * 100000 + id % 100000`), nothing is written; `BB_PARTY_CHALICE_CASEFLAGS=0` off. The sold-out flags stay
+per player: a guest that already bought that chalice in its own game does not see the row again (as in the original game).
+Diagnostics: `BB_PARTY_SHOP_GATE_LOG=1` logs `chalice case flags (role, load mode, map): <92905300..399 set>; slot k group:
+...; region flags 129072xx: ...` when the set changes. Smoke `chalice_shop`: csh (host `chalice_isz_ritual`, guest the default
+save with 30000 echoes: the guest's Bath Messenger lists the Sinister Isz Root Chalice in its Chalices tab and the
+guest buys it, 20000 of its own echoes, Isz 6532 x1) and csh2 (guest `chalice_hintertomb_ritual`: its flags are the host's
+92905300,302,345,378,389, never its own 301,310). Not proven: the shop UI itself for a guest with a dungeon of its own (in
+the test a warp to the messenger leaves its region events silent: no talk prompt; with the redirect or without), and a
+real Lower Pthumeru dungeon (no fixture; the Isz dungeon uses the same mechanism, feature 89).
 
 ### 11.2 Boss item drops for the guests (0.7.6, bossdrops; user decision 2026-10-25)
 

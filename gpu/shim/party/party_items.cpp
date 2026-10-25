@@ -3986,6 +3986,55 @@ void ShopGateTick(const GameSnapshot& gs, int load_mode, double now) {
     }
 }
 
+// Diagnostics (BB_PARTY_SHOP_GATE_LOG=1, off by default): the Chalice "case" flags 92905300+n of the dungeon
+// the player stands in, as this game's flag manager reads them (Sinister Root Chalice shop gates are
+// 92905385-92905389). Logged when the set changes, at most 20 lines.
+void ChaliceCaseFlagLogTick(const GameSnapshot& gs, int load_mode, double now) {
+    static const bool on = std::getenv("BB_PARTY_SHOP_GATE_LOG") && std::string(std::getenv("BB_PARTY_SHOP_GATE_LOG")) == "1";
+    static double next = 0.0;
+    static std::string last;
+    static int lines = 0;
+    if (!on || !gs.world_up || gs.loading || gs.map_id == 0xffffffffu || (gs.map_id >> 24) != 29 || now < next || lines >= 20) {
+        return;
+    }
+    next = now + 1.0;
+    const u64 man = Ptr(kFlagMan);
+    if (!man) {
+        return;
+    }
+    std::string set;
+    for (std::int32_t f = 92905300; f < 92905400; ++f) {
+        if (IsFlag(man, f)) {
+            set += (set.empty() ? "" : ",") + std::to_string(f);
+        }
+    }
+    // the same flags in the chalice slot groups (area 40 + k, type 9, zone 5)
+    for (int k = 0; k < 7; ++k) {
+        std::string in;
+        for (std::int32_t n = 300; n < 400; ++n) {
+            if (IsFlag(man, 94005000 + k * 100000 + n)) {
+                in += (in.empty() ? "" : ",") + std::to_string(n);
+            }
+        }
+        set += "; slot " + std::to_string(k) + " group: " + (in.empty() ? "none" : in);
+    }
+    {
+        std::string reg;
+        for (std::int32_t f = 12907200; f < 12907260; ++f) {
+            if (IsFlag(man, f)) {
+                reg += (reg.empty() ? "" : ",") + std::to_string(f);
+            }
+        }
+        set += "; region flags 129072xx: " + (reg.empty() ? std::string("none") : reg);
+    }
+    if (set != last) {
+        last = set;
+        lines++;
+        Log("chalice case flags (role %d, load mode %d, map 0x%08x): %s", int(gs.session_role), load_mode, gs.map_id,
+            set.empty() ? "none" : set.c_str());
+    }
+}
+
 int g_batch_n = 0;         // quiet catch-up gives since the last summary notice
 double g_batch_last = 0.0;  // when the last one landed
 
@@ -4025,6 +4074,7 @@ void ItemsTick() {
     s.game_dialog = gs.world_up && split::DialogUp();
     ItemGetWatchTick(gs, Now());
     ShopGateTick(gs, s.load_mode, Now());
+    ChaliceCaseFlagLogTick(gs, s.load_mode, Now());
     RepairShopGatesTick(gs);
     KeyGoodsWatchTick(gs, s.load_mode, Now());
     SummonedGivesTick(gs, s.load_mode, Now());
