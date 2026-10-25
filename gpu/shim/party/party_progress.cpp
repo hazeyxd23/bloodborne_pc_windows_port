@@ -2934,6 +2934,11 @@ bool WriteFlagOwnSave(u32 id, bool value) {
     return store.Valid() && store.WriteOwnSave(id, value);
 }
 
+bool WriteFlagVisible(u32 id, bool value) {
+    const FlagStore store(Manager(), GameOps());
+    return store.Valid() && store.WriteVisible(id, value);
+}
+
 bool HostSnapshotFlag(u32 id, bool* value) {
     Init();
     Global& g = G();
