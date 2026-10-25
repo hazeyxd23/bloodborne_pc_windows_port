@@ -455,6 +455,16 @@ bool SharedKeyTreasureLot(std::int32_t lot) {
     return false;
 }
 
+namespace {
+TreasureHider g_treasure_hider = nullptr;
+}
+void SetTreasureHider(TreasureHider h) {
+    g_treasure_hider = h;
+}
+std::uint32_t TreasureFlagToHide(std::int32_t lot) {
+    return lot > 0 && lot < 10000000 && SharedKeyTreasureLot(lot) ? 50000000u + std::uint32_t(lot) : 0u;
+}
+
 bool InstancedTreasureFlag(std::int32_t flag, bool instanced, bool captured) {
     if (!(instanced && !captured && flag >= 50000000 && flag < 60000000 && flag / 100000 % 100 != 0)) {
         return false;
@@ -2750,6 +2760,11 @@ SummonedResult ApplySummoned(const ItemGrant& g, bool quiet) {
     for (const std::int64_t f : flags) {
         const bool ok = progress::WriteFlagOwnSave(static_cast<u32>(f), true);
         flag_list += (flag_list.empty() ? "" : ",") + std::to_string(f) + (ok ? "" : "(NOT written)");
+    }
+    // The treasure this lot lies as in the host's world (shared key items): taken from this game's copy
+    // too, else it stays on the ground for the guest and a second pickup gives the key twice.
+    if (const std::uint32_t tf = TreasureFlagToHide(g.lot); tf && g_treasure_hider && g_treasure_hider(tf)) {
+        Log("%s: its treasure (flag %u) taken out of this game's copy of the host's world", DescribeItem(g).c_str(), tf);
     }
     if (fit != LotFit::Give) {
         Log("skip %s while summoned: %s (%s); own-save flag(s) %s set instead", DescribeItem(g).c_str(),

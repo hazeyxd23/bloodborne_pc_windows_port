@@ -3284,6 +3284,36 @@ void WorldactRewriter(int event_id, int bank, int id, std::uint64_t event, std::
 }
 } // namespace
 
+namespace {
+/// A shared key treasure was given to this member (party_items ApplySummoned): the treasure lying in
+/// its game's copy of the host's world is taken out of MapItemMan (kind 3 list at +0x28, node +0x20 handle,
+/// +0x28 pickup flag) with the game's own removal 0x17D6780(man, &handle, set_flag = 0): no flag is set, the
+/// record and its object go. The spawn of a later load checks the own save's flag (set by the give).
+bool HideTreasureByFlag(std::uint32_t flag) {
+    std::uint64_t man = 0, node = 0;
+    if (!SafeGet(Guest(0x553d6e0), &man) || !man || !SafeGet(man + 0x28, &node)) {
+        return false;
+    }
+    using Remove = void(BB_COOP_SYSV*)(std::uint64_t, std::int32_t*, std::uint8_t);
+    for (int guard = 0; node && guard < 4096; ++guard) {
+        std::uint32_t f = 0;
+        SafeGet(node + 0x28, &f);
+        if (f == flag) {
+            std::int32_t handle = 0;
+            if (!SafeGet(node + 0x20, &handle)) {
+                return false;
+            }
+            reinterpret_cast<Remove>(Guest(0x17d6780))(man, &handle, 0);
+            return true;
+        }
+        if (!SafeGet(node, &node)) {
+            break;
+        }
+    }
+    return false;
+}
+} // namespace
+
 void Init() {
     State& st = S();
     if (!st.enabled) {
@@ -3291,6 +3321,7 @@ void Init() {
     }
     SetEmevdRewriter3(&WorldactRewriter);
     EnsureEmevdFilter();
+    SetTreasureHider(&HideTreasureByFlag);
     // push rbp; mov rbp, rsp; push r15; push r14; push r13; push r12; push rbx (13 bytes, both).
     const bool a = HookPrologue(0x13AE370, {0x55, 0x48, 0x89, 0xe5, 0x41, 0x57, 0x41, 0x56, 0x41, 0x55, 0x41, 0x54, 0x53},
                                 &LocalKickEntry, "ObjAct local kick (log)");
