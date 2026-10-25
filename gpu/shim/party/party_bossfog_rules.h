@@ -46,6 +46,27 @@ inline bool FightStateFlag(std::uint32_t id) {
     return id >= 10000000u && FightStateBlock(id / 1000u);
 }
 
+/// The bosses' HP-driven phase events (EMEVD names `..._ヒートアップ..`, every map; Ludwig 13404820-25,
+/// whose latter half plays the Holy Blade scene and warps into the arena). The host's own copy decides
+/// from the host's boss chr; a guest's copy runs on the guest's chr, whose HP can disagree after the
+/// host's wipe load (the guest still holds the old fight until its own load) and then tells the host
+/// "done" in a network event state (packet 0x31): the host played the phase-2 scene at the lamp and
+/// stood alone in the fight (player report 2026-10-25, smoke lw with BB_LW_INJECT). The host takes no
+/// peer's state for these events.
+inline bool HostOnlyBossEvent(std::uint32_t id) {
+    static constexpr std::uint32_t kIds[] = {
+        12104807u, 12204807u, 12304707u, 12304807u, 12304808u, 12404807u, 12414707u, 12424980u, 12704806u,
+        12704812u, 12804870u, 12804871u, 12904028u, 12904735u, 12904868u, 12904884u, 12904889u, 12906766u,
+        12906767u, 12906863u, 12906869u, 12906870u, 13204807u, 13304807u, 13304808u, 13404820u, 13404821u,
+        13404822u, 13404823u, 13404824u, 13404825u, 13604820u};
+    for (std::uint32_t k : kIds) {
+        if (k == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// Guest, after the host's snapshot was applied for a load into the host's world: the overlay group
 /// of `block` came back all zero (`now_zero`); the copy saved before the load had bits in it
 /// (`saved_nonzero`). Restore it from that copy? Never a fight-state group: zero is the host's reset
