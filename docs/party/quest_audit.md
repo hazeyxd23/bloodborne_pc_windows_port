@@ -302,7 +302,7 @@ major / minor / ok; **fix** = done here (F#), proposal (P#, list at the end) or 
 |---|---|---|---|---|---|
 | Lamps | 3202950-3202953 (+ script points 3202956-3202959) | | via host | ok | |
 | Lecture Theatre Key | lot 3200720 (treasure); ObjAct 3200030 | picks up | was per player | major | F2 |
-| Lunarium Key | 13200400 award lot 3200810 (flag 53200810); ObjAct 3200040 | award | captured -> shared | ok | |
+| Lunarium Key | 13200400 award lot 3200810 (flag 53200810); ObjAct 3200040 | award | captured -> shared | ok | 0.7.6: live in a party (smoke lk); key catch-up on (lkc), items.md 10.9 |
 | Willem | 513000 (talk NPC + two cutscene dummies, every MSB checked), t320310; 13200121 points at the moon | | solid since P3 (2026-10-15): the guest can talk | ok | P3 |
 | Rom | defeat 13201800 (3200 never_sync, 9465), lot 51001900 (ledger 40); fog door 3201800 (action 3200800, host event 13204830, guest event 13204831 waits on 13201802 + 13204800; the landing in the lake 13204820 / 13204821 region 3202800, sets 13204801); first fight = anyone's first hit on Rom (13201802, 3[23] attacker -1), the wall rises after it | fight (no intro) | guest fog first (0.7.6: the gate was missing from BossGates, a guest had no prompt after the host's first hit; fixed, smoke phase rf) | ok | |
 | Blood Moon | 13201803 (host only: Rom dead + near Queen Yharnam 3200801), remo 32000000 tod 3, sets 70002802, `2003[49] 2802958` | cutscene -> travel question | live mirror (a mirror cut by the guest's own load is replayed in full); time of day into the own save; the host's question after the scene, the party travels to Yahar'gul (parg, live) | ok | checklist 7/8 |
