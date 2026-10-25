@@ -41,6 +41,7 @@
 #include "seamless_rules.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -614,6 +615,93 @@ void CensusTick(const GameSnapshot& s) {
         quiet = 0;
     }
     prev = CarryEnemyCensus(prev, cur);
+}
+
+// BB_PARTY_AI_LOG=1 (diagnostics, off by default; launcher Diagnostics): who runs an enemy's AI on this
+// game. NpcIns::SetManipulator 0x18E6540 picks the chr's active manipulator (+0x60): the local
+// ComManipulator (+0x3B8: this game runs the AI) or the NetAIManipulator (+0x3C0: the AI runs on the
+// owner's game, this one replays it) from the WorldChrMan +0xA40 owner table and the chr's vfunc +0x4C8
+// (enemyai.md). Logs the nearest enemies when their state changes, at most every 2 s.
+void AiProbeTick(const GameSnapshot& s) {
+    static const bool on = [] {
+        const char* v = std::getenv("BB_PARTY_AI_LOG");
+        return v && *v && *v != '0';
+    }();
+    if (!on || !s.world_up || s.loading || !s.player) return;
+    static Clock::time_point next{};
+    static std::map<u64, std::string> last;
+    const auto now = Clock::now();
+    if (now < next) return;
+    next = now + std::chrono::seconds(2);
+    const u64 wcm = Slot(kSlotWorldChrMan);
+    float me[3];
+    if (!wcm || !ChrPosition(s.player, me)) return;
+    struct Row { float d; u64 chr; };
+    std::vector<Row> rows;
+    for (const auto& e : LoadedEnemyList(wcm)) {
+        float p[3];
+        if (!e.alive || !ChrPosition(e.chr, p)) continue;
+        // only the enemies the game has activated (chr entry +0x10 == 4): the others sleep until a player is near
+        if (Field<int>(Field<u64>(e.chr, 0x18), 0x10, -1) != 4) continue;
+        rows.push_back({std::hypot(p[0] - me[0], p[2] - me[2]), e.chr});
+    }
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.d < b.d; });
+    // how many of the 12 nearest enemies moved (> 0.3 m) since the last look: the evidence that their AI runs
+    {
+        static std::map<u64, std::array<float, 3>> seen;
+        int moved = 0, n = 0;
+        for (const Row& r : rows) {
+            if (n >= 12) break;
+            float p[3];
+            if (!ChrPosition(r.chr, p)) continue;
+            ++n;
+            auto it = seen.find(r.chr);
+            if (it != seen.end() && std::hypot(p[0] - it->second[0], p[2] - it->second[2]) > 0.3f) ++moved;
+            seen[r.chr] = {p[0], p[1], p[2]};
+        }
+        static int last_moved = -1, quiet = 0;
+        if (moved != last_moved || ++quiet >= 5) {
+            Log("ai: %d of the %d nearest active enemies moved in the last 2 s (nearest %.0f m)", moved, n, rows.empty() ? 0.0 : double(rows[0].d));
+            last_moved = moved;
+            quiet = 0;
+        }
+    }
+    int logged = 0;
+    for (const Row& r : rows) {
+        if (logged++ >= 6) break;
+        const u64 chr = r.chr;
+        const u64 cur = Field<u64>(chr, 0x60), com = Field<u64>(chr, 0x3b8), net = Field<u64>(chr, 0x3c0);
+        u64 vt = Field<u64>(chr, 0);
+        const u64 fn = vt ? Field<u64>(vt, 0x4c8) : 0;
+        const int v4c8 = fn ? int(reinterpret_cast<bool(BB_COOP_SYSV*)(u64)>(fn)(chr)) : -1;
+        // the owner table lookup of 0x18E6540 (handle chr +0x90: area 5 bits, index 11 bits)
+        int tab = -1;
+        const u32 h = Field<u32>(chr, 0x90, ~0u);
+        if (h != ~0u && int(h) >= 0) {
+            const u64 t = Field<u64>(wcm, 0xa40);
+            const u32 a = (h >> 11) & 0x1f;
+            tab = 0;
+            if (t && int(a) < Field<int>(t, 8)) {
+                const u64 t2 = Field<u64>(t, 0x10 + u64(a) * 8);
+                if (t2 && int(h & 0x7ff) < Field<int>(t2, 0x10) &&
+                    Field<std::int16_t>(Field<u64>(t2, 0x18), (h & 0x7ff) * 2, -1) >= 0)
+                    tab = 1;
+            }
+        }
+        // chr +0x18 record: +0x10 / +0x14 modes, +0x20 bit 0 disabled / bit 1 net-controlled, +0x30 sync object (+0x18 bit 0 remote)
+        const u64 rec = Field<u64>(chr, 0x18), sync = Field<u64>(rec, 0x30);
+        char b[260];
+        std::snprintf(b, sizeof b, "manip %s (+0x1ec %u) owner table %d vfunc4c8 %d rec %d/%d/%02x sync %02x anim %d",
+                      cur == com ? "Com" : cur == net ? "NetAI" : "other", Field<u32>(chr, 0x1ec, 0), tab, v4c8,
+                      Field<int>(rec, 0x10, -1), Field<int>(rec, 0x14, -1), unsigned(Field<u8>(rec, 0x20, 0)),
+                      unsigned(Field<u8>(sync, 0x18, 0)),
+                      Field<std::int32_t>(Field<u64>(Field<u64>(chr, 0x3b0), 0x18), 0xc0, -9));
+        std::string& l = last[chr];
+        if (l != b) {
+            l = b;
+            Log("ai: enemy %u (chr %08x) %.0f m: %s", Field<u32>(chr, 0x1f0, 0), h, double(r.d), b);
+        }
+    }
 }
 
 void EnemyPass(const GameSnapshot& s, bool scale) {
@@ -1533,6 +1621,7 @@ void Tick(const GameSnapshot& s, party::PartyLink* link, bool host) {
     }
 
     CensusTick(s);
+    AiProbeTick(s);
     const bool in_world = s.world_up && !s.loading && s.player;
     if (in_world) LevelSyncTick(r.level_sync, r.phantom_hp, now);
     // The rot belongs to the character: each save slot has its own (party_rot.txt), and a new game
