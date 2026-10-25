@@ -1045,4 +1045,4 @@ rule (a unique item already held, no room = counts as given) and the usual item 
 over). Key goods in the list are left out (their own rules share them). Switches: host rule `HostRule::BossDrops`
 (Rules `boss_drops`, ini `party_boss_drops`, `BB_PARTY_BOSS_DROPS`).
 Not covered: bosses whose drop is not a `2003[4]` in their defeat event (an enemy-param drop rolls locally on a client).
-Unit: party-items-test `test_boss_drop`. Smoke group `bossdrops`.
+Unit: party-items-test `test_boss_drop`. Smoke groups `boss_drops` (phase bd: the party at the Moonside Lake lamp, the host awards Rom's lot 51001900 through the game's award function with hostOnly 1 (`BB_PARTY_ITEMS_HOST_TEST`, which waits for the lot's map area); the guest's item box shows Kin Coldblood, held 0 -> 1, one give) and `boss_drops_off` (bdo: `BB_PARTY_BOSS_DROPS=0` on the host, no grant, no give). Rom's real fight is not started by a test walk (HP 0 on her entity ends nothing), so her real defeat event is unproven live.

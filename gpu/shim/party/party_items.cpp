@@ -2053,6 +2053,12 @@ void HostTestTick(double now) {
     if (now - g_host_test_coop < 20.0 || now - g_host_test_last < 10.0) {
         return;
     }
+    {   // 0.7.6: a world boss's lot is awarded where the boss is (the guests present at the kill: the same map area)
+        const int area = BossDropArea(g_host_test[g_host_test_next]);
+        if (area >= 0 && (quick.map_id == 0xffffffffu || static_cast<int>(quick.map_id >> 24) != area)) {
+            return;
+        }
+    }
     g_host_test_last = now;
     const std::int32_t lot = g_host_test[g_host_test_next++];
     const u64 mim = Ptr(kMapItemMan);
