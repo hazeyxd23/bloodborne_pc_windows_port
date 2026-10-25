@@ -527,6 +527,12 @@ ending step t=...` every 10 s (the world is down for minutes; it also keeps the 
 away) and `ending: the next cycle's world is up ...` with the NG cycle; `NG cycle N at world-up`
 is logged once per world-up.
 
+0.7.6: a guest that answers YES plays the HOST's ending type (`GuestEndingType`): until 0.7.5 B/C followed the
+guest's own flag 9900 (three cords), so the ng_plus_coop session's guest without cords got B (remo 21000020)
+after the host's C. The host's `ending_sent` latch resets with every NG-cycle change. Smoke phase `ef`
+(group `ending_flow`): the default save's guest, `ending:3,summoned` + `BB_PARTY_ENDING_TEST=yes`: remo
+2100[01]030, NG step once, flag 23, staff roll screenshots.
+
 Test hook: `BB_PARTY_STORY_TEST=ending:<1|2|3>[,summoned]` (+ `BB_PARTY_STORY_TEST_DELAY`) queues
 that ending as if the host had sent it (`summoned`: only once session role 6).
 
