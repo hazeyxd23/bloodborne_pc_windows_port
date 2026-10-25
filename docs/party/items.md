@@ -1036,3 +1036,24 @@ flag (type 9), so a future gate is covered by regenerating. `shop_gates.py` reso
 "NOT SYNCED" for a `progress` gate whose category C2 does not share and `--check` makes that an exit code. The
 Sinister Root Chalice gates 92905385-92905389 are engine-set per dungeon (chalice type 9 groups, never written from
 outside) and stay out of scope.
+
+### 11.2 Boss item drops for the guests (0.7.6, bossdrops; user decision 2026-10-25)
+
+Player report: a guest got no Kin Coldblood from Rom. Root cause: Rom's event 13201800 awards lot 51001900 with
+`2003[4]` host-only; a guest client refuses hostOnly lots (2.3), the lot is a consumable so the 0.7.5 policy (11)
+retired it from the ledger and denies it (`ITEM_UNSHARED`), and the Chalice path (G1) only covers area 29. Echoes and
+Insight were paid, the item not.
+
+Fix, same shape as the Chalice awards: `item_tool.py gen-inc` writes `ITEM_BOSS_DROP(lot, map area, note)`, 25 lots, every
+`item_lot` (`2003[4]`) of an event with a boss / mid-boss defeat marker outside m29 (base game and the DLC maps m33-m36).
+On the host, `AwardEntry` takes a hostOnly award of such a lot when `ClassifyAward` shares nothing (the key / unique lots
+keep their flag / ledger path), the rule `party_boss_drops` is on and the world is the host's own: an
+`ItemSource::BossDrop` grant (`"boss"` on the wire) whose items are what the host's roll really gave (`AwardReplace`
+captures the give list), no flag, no ledger, key `kBossDropKeyBase + n` (one per kill). A guest takes it only while
+summoned (load mode 1) in the map area of the lot (`BossDropAccepted`: the guests at the kill) and the host's rule is on;
+elsewhere it is dropped, never carried home. `ApplySummoned` gives exactly the host's items through the usual refusal
+rule (a unique item already held, no room = counts as given) and the usual item box timing (alive, no cutscene, banner
+over). Key goods in the list are left out (their own rules share them). Switches: host rule `HostRule::BossDrops`
+(Rules `boss_drops`, ini `party_boss_drops`, `BB_PARTY_BOSS_DROPS`).
+Not covered: bosses whose drop is not a `2003[4]` in their defeat event (an enemy-param drop rolls locally on a client).
+Unit: party-items-test `test_boss_drop`. Smoke groups `boss_drops` (phase bd: the party at the Moonside Lake lamp, the host awards Rom's lot 51001900 through the game's award function with hostOnly 1 (`BB_PARTY_ITEMS_HOST_TEST`, which waits for the lot's map area); the guest's item box shows Kin Coldblood, held 0 -> 1, one give) and `boss_drops_off` (bdo: `BB_PARTY_BOSS_DROPS=0` on the host, no grant, no give). Rom's real fight is not started by a test walk (HP 0 on her entity ends nothing), so her real defeat event is unproven live.

@@ -10,6 +10,8 @@
 // gives to every member (not per player); catchup 1: the key catch-up re-gives it.
 // ITEM_UNSHARED(lot): lots that give no key / unique item (party policy 0.7.5: consumables and
 // repeatable stacks are per player): never broadcast, replayed or taken from the host.
+// ITEM_BOSS_DROP(lot, map area, note): host-only item lots a world boss's defeat event awards;
+// the host's roll goes to the guests present at the kill (party rule, 0.7.6).
 // ---- 1133 flagged lots
 #ifdef ITEM_LOT_FLAG
 ITEM_LOT_FLAG(10000, 6620)
@@ -2143,6 +2145,34 @@ ITEM_SHARED_TREASURE(3500800, 1, "goods 4018")
 ITEM_SHARED_TREASURE(3501800, 0, "goods 4021")
 ITEM_SHARED_TREASURE(3501850, 0, "goods 4020")
 ITEM_SHARED_TREASURE(3502000, 0, "goods 4014")
+#endif
+// ---- 25 boss drop lots
+#ifdef ITEM_BOSS_DROP
+ITEM_BOSS_DROP(15000, 21, "m21_00_00_00 ev 12101800")
+ITEM_BOSS_DROP(15005, 21, "m21_00_00_00 ev 12101800")
+ITEM_BOSS_DROP(21000, 26, "m26_00_00_00 ev 12601850")
+ITEM_BOSS_DROP(31000, 24, "m24_01_00_00 ev 12411800")
+ITEM_BOSS_DROP(2700990, 27, "m27_00_00_00 ev 12701800")
+ITEM_BOSS_DROP(2700995, 27, "m27_00_00_00 ev 12701800")
+ITEM_BOSS_DROP(3401800, 34, "m34_00_00_00 ev 13401800")
+ITEM_BOSS_DROP(3401802, 34, "m34_00_00_00 ev 13401800")
+ITEM_BOSS_DROP(3401850, 34, "m34_00_00_00 ev 13401850")
+ITEM_BOSS_DROP(3401852, 34, "m34_00_00_00 ev 13401850")
+ITEM_BOSS_DROP(3501850, 35, "m35_00_00_00 ev 13501850")
+ITEM_BOSS_DROP(3601800, 36, "m36_00_00_00 ev 13601800")
+ITEM_BOSS_DROP(21002950, 22, "m22_00_00_00 ev 12201800")
+ITEM_BOSS_DROP(25700000, 24, "m24_02_00_00 ev 12421700")
+ITEM_BOSS_DROP(25700005, 24, "m24_02_00_00 ev 12421700")
+ITEM_BOSS_DROP(50000001, 24, "m24_00_00_00 ev 12401800")
+ITEM_BOSS_DROP(50000010, 24, "m24_01_00_00 ev 12411700")
+ITEM_BOSS_DROP(50700000, 28, "m28_00_00_00 ev 12801800")
+ITEM_BOSS_DROP(50800000, 23, "m23_00_00_00 ev 12301700")
+ITEM_BOSS_DROP(50800005, 23, "m23_00_00_00 ev 12301700")
+ITEM_BOSS_DROP(51001900, 32, "m32_00_00_00 ev 13201800")
+ITEM_BOSS_DROP(55100000, 26, "m26_00_00_00 ev 12601800")
+ITEM_BOSS_DROP(80000000, 23, "m23_00_00_00 ev 12301800")
+ITEM_BOSS_DROP(80000200, 33, "m33_00_00_00 ev 13301800")
+ITEM_BOSS_DROP(80000300, 24, "m24_02_00_00 ev 12421800")
 #endif
 // retired ledger lot 15005 (index 2 stays reserved)
 // retired ledger lot 22000 (index 4 stays reserved)
