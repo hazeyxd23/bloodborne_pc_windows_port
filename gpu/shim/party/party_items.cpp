@@ -207,6 +207,58 @@ std::int32_t ItemLedgerDoneFlag(std::int32_t idx) {
     return kItemNone;
 }
 
+namespace {
+// Per-player shop gates of weapons (docs/party/shop_gates.md, tools/party/shop_gates.py): 5100-5282 are the pickup
+// flags of the Chalice lots of the base-game Uncanny / Lost weapons, 5500-5521 the "owns weapon X" completion flags
+// of common event 5500+slot (the Old Hunters ones). Progress-class gates (5090/5091, 59xx) are not in the table.
+struct ShopGateRow {
+    std::int32_t flag;
+    std::int32_t weapon;
+};
+constexpr ShopGateRow kShopGates[] = {
+    {5100, 7010000}, {5120, 7110000}, {5121, 22010000}, {5140, 5010000}, {5160, 8010000}, {5161, 7120000},
+    {5162, 7020000}, {5163, 10010000}, {5180, 11010000}, {5200, 8110000}, {5201, 2010000}, {5202, 12010000},
+    {5203, 10110000}, {5220, 9010000}, {5221, 5020000}, {5222, 13010000}, {5223, 10020000}, {5240, 5120000},
+    {5241, 4020000}, {5242, 2020000}, {5243, 12020000}, {5244, 10120000}, {5260, 9020000}, {5261, 5110000},
+    {5262, 4010000}, {5263, 13020000}, {5264, 11020000}, {5280, 8120000}, {5281, 8020000}, {5282, 22020000},
+    {5500, 23010000}, {5501, 23020000}, {5502, 24010000}, {5503, 24020000}, {5504, 30010000},
+    {5505, 30020000}, {5506, 32010000}, {5507, 32020000}, {5508, 26010000}, {5509, 26020000},
+    {5510, 27010000}, {5511, 27020000}, {5512, 31010000}, {5513, 31020000}, {5514, 28010000},
+    {5515, 28020000}, {5516, 29010000}, {5517, 29020000}, {5518, 25010000}, {5519, 25020000},
+    {5520, 38010000}, {5521, 38020000},
+};
+} // namespace
+
+std::int32_t ShopGateWeapon(std::int32_t flag) {
+    for (const ShopGateRow& r : kShopGates) {
+        if (r.flag == flag) {
+            return r.weapon;
+        }
+    }
+    return 0;
+}
+
+ShopGateRepair ShopGatesToRepair(const std::function<bool(std::uint32_t)>& is_set,
+                                 const std::function<int(std::int32_t)>& owns) {
+    ShopGateRepair r;
+    if (is_set(kShopGatesRepaired)) {
+        r.done = true;
+        return r;
+    }
+    for (const ShopGateRow& row : kShopGates) {
+        if (!is_set(static_cast<std::uint32_t>(row.flag))) {
+            continue;
+        }
+        const int o = owns(row.weapon);
+        if (o < 0) {
+            r.complete = false; // cannot tell: leave the flag, try again
+        } else if (o == 0) {
+            r.clear.push_back(row.flag);
+        }
+    }
+    return r;
+}
+
 std::vector<std::uint32_t> LedgerBitsToSeed(const std::function<bool(std::uint32_t)>& is_set) {
     std::vector<std::uint32_t> out;
     if (is_set(kItemLedgerSeeded)) {
@@ -3721,6 +3773,76 @@ void KeyGoodsWatchTick(const GameSnapshot& gs, int load_mode, double now) {
     baseline = true;
 }
 
+// Main thread, own world (load mode 0), world settled: once per save (marker kShopGatesRepaired), clears
+// every weapon shop-gate flag (5100-5282, 5500-5521) that is set although the player owns no such weapon (inventory and
+// storage box, any upgrade level). 0.7.4-era sessions wrote them into the own save of a summoned guest.
+// BB_PARTY_SHOP_REPAIR=0 switches it off.
+void RepairShopGatesTick(const GameSnapshot& gs) {
+    static double next = 0.0, up_since = 0.0;
+    static bool done = false, logged_wait = false;
+    static bool off = std::getenv("BB_PARTY_SHOP_REPAIR") && std::string(std::getenv("BB_PARTY_SHOP_REPAIR")) == "0";
+    if (!g_on.load() || off || done) {
+        return;
+    }
+    const double now = Now();
+    const u64 man = Ptr(kFlagMan);
+    // The own world only (load mode 0: the live store is the own save), the world up and settled so the
+    // inventory and the storage are loaded.
+    if (!man || LoadMode(man) != 0 || !gs.world_up || gs.loading || gs.map_id == 0xffffffffu || gs.player_rec == 0) {
+        up_since = 0.0;
+        return;
+    }
+    if (up_since == 0.0) {
+        up_since = now;
+    }
+    if (now - up_since < 8.0 || now < next) {
+        return;
+    }
+    next = now + 2.0;
+    auto is_set = [man](std::uint32_t id) { return IsFlag(man, id); };
+    auto owns = [](std::int32_t base) {
+        bool unknown = false;
+        for (int lvl = 0; lvl <= kShopWeaponMaxLevel; ++lvl) {
+            const u32 id = static_cast<u32>(base + 100 * lvl);
+            const int inv = ItemCount(0, id), box = StorageItemCount(0, id);
+            if (inv > 0 || box > 0) {
+                return 1;
+            }
+            unknown = unknown || inv < 0 || box < 0;
+        }
+        return unknown ? -1 : 0;
+    };
+    const ShopGateRepair r = ShopGatesToRepair(is_set, owns);
+    if (r.done) {
+        done = true;
+        return;
+    }
+    std::string cleared;
+    for (const std::int32_t f : r.clear) {
+        SetFlag(man, f, false);
+        cleared += (cleared.empty() ? "" : ",") + std::to_string(f) + "(" + std::to_string(ShopGateWeapon(f)) + ")";
+    }
+    if (!r.complete) {
+        if (!logged_wait) {
+            logged_wait = true;
+            Log("shop gate repair: the inventory or storage is not readable yet, trying again");
+        }
+        return;
+    }
+    SetFlag(man, kShopGatesRepaired);
+    done = true;
+    std::string kept;
+    for (const ShopGateRow& row : kShopGates) {
+        if (IsFlag(man, row.flag)) {
+            kept += (kept.empty() ? "" : ",") + std::to_string(row.flag);
+        }
+    }
+    Log("shop gate repair: %zu 'owns the weapon' flag%s set without the weapon cleared%s%s; still set (weapon owned): %s; "
+        "save marked (flag %u)",
+        r.clear.size(), r.clear.size() == 1 ? "" : "s", cleared.empty() ? "" : ": ", cleared.c_str(),
+        kept.empty() ? "none" : kept.c_str(), kShopGatesRepaired);
+}
+
 // ---- the guest's shop gates while summoned (0.7.5) ----
 // The messenger shop lists the Uncanny / Lost weapons of ShopLineupParam rows gated by the event
 // flags 5500-5521 (docs/party/shop_gates.md). Their setter is common event 5500+slot, "the player
@@ -3799,6 +3921,7 @@ void ItemsTick() {
     s.game_dialog = gs.world_up && split::DialogUp();
     ItemGetWatchTick(gs, Now());
     ShopGateTick(gs, s.load_mode, Now());
+    RepairShopGatesTick(gs);
     KeyGoodsWatchTick(gs, s.load_mode, Now());
     SummonedGivesTick(gs, s.load_mode, Now());
     KeyCatchupTick(gs, s.load_mode, Now());
