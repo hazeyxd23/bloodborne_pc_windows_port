@@ -77,7 +77,10 @@ inline bool FogWalkedThrough(bool seen_out, bool in, bool handled) {
 // guest's walk through the fog may stand in for it (the host's chr visits the spot, P5 / D10).
 // `action`: it waits on something the host does inside the room - Laurence (13404861 / 13401851:
 // goods 4014 Laurence's Skull held, 3[4], in the altar region 3402855), Ebrietas (12421802: the
-// host's own hit, 3[23] attacker 10000), Lady Maria (13501801 waits on 13500947, set when the host
+// host's own hit, 3[23] attacker 10000), Rom (m32 13201802: anyone's first hit on her, 3[23] attacker
+// -1; her fog 3201800 and its guest-entry event 13204831 were missing from BossGates, so after the
+// host's first hit - the fog wall up - no guest ever got the prompt: player report 2026-10-25),
+// Lady Maria (13501801 waits on 13500947, set when the host
 // examines her, 13500948). Until then the room is open: the host's re-fight event disables the fog
 // until the first fight has run (1003[101] intro -> label 0, else 2005[3](fog, 0), a wait on the
 // intro flag, 2005[3](fog, 1)), but its `1003[5] skip 2 if client` keeps the fog up in a guest's
@@ -116,6 +119,7 @@ inline const FirstFight* FirstFights(std::size_t* n) {
         {12604861, FirstStart::entry},  // Micolash 12601852, 32 m of 2600850
         {12704841, FirstStart::entry},  // Shadows of Yharnam 12701802, region 2702805
         {12804881, FirstStart::entry},  // the One Reborn 12801802, region 2802805
+        {13204831, FirstStart::action, 13204830, 2, "Rom: the fight starts with the first hit on her"},
         {13304871, FirstStart::entry},  // Amygdala 13301802, region 3302805
         {13404801, FirstStart::entry},  // Ludwig 13404811 + 13401801, region 3402805
         {13404851, FirstStart::action, 13404850, 2,

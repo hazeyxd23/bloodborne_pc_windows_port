@@ -117,3 +117,13 @@ Class: `progress` = shared with the party, `item` = per player (the item was obt
 | 92905387 | never_sync | progress | 4 rows (510013..) | Sinister Pthumeru Ihyll Root Chalice (goods 6502) | no setter found |
 | 92905388 | never_sync | progress | 4 rows (510014..) | Sinister Lower Loran Root Chalice (goods 6522) | no setter found |
 | 92905389 | never_sync | progress | 4 rows (510015..) | Sinister Isz Root Chalice (goods 6532) | no setter found |
+
+## Repair of leftover item gates (0.7.6)
+
+0.7.4-era sessions wrote the 5500-5521 completion flags (and possibly the 5100-5282 pickup flags) of a summoned
+guest into its own save. `RepairShopGatesTick` (party_items.cpp, own world only, 8 s after the world is up) clears
+every weapon gate flag of the two ranges that is set while the player owns no such weapon (inventory + storage box,
+weapon id + 100 * level for levels 0-15), once per save (marker flag 60009998, last-but-one bit of the item ledger
+range), and logs one line ("shop gate repair: ..."). Progress gates (5090/5091, 59xx) and goods gates are never
+touched. `BB_PARTY_SHOP_REPAIR=0` switches it off. Smoke groups `shop_repair` (one player) and `shop_repair2`
+(a guest that goes home, is repaired, rejoins and opens the shop).

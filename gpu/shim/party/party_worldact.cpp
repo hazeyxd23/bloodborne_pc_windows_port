@@ -344,6 +344,9 @@ const std::vector<BossGate>& BossGates() {
         {12604861, 12604850, 12604851, 12601850, 12601852, 2601850},
         {12704841, 12704800, 12704801, 12701800, 12701802, 2701800},
         {12804881, 12804800, 12804801, 12801800, 12801802, 2801800},
+        // Rom (m32_00): the fog 3201800 asks for the host's entry like the others (13204831 waits on
+        // 13201802 + 13204800); the guest's flag comes from the landing event 13204821 in the arena.
+        {13204831, 13204800, 13204801, 13201800, 13201802, 3201800, 13204821},
         {13304871, 13304800, 13304801, 13301800, 13301802, 3301800},
         {13404801, 13404808, 13404809, 13401800, 13401801, 3401800},
         {13404851, 13404858, 13404859, 13401850, 13401851, 3401850},
@@ -357,6 +360,15 @@ const std::vector<BossGate>& BossGates() {
 const BossGate* BossGateByEvent(std::int32_t guest_event) {
     for (const BossGate& g : BossGates()) {
         if (static_cast<std::int32_t>(g.guest_event) == guest_event) {
+            return &g;
+        }
+    }
+    return nullptr;
+}
+
+const BossGate* BossGateByLandingEvent(std::int32_t event_id) {
+    for (const BossGate& g : BossGates()) {
+        if (g.landing_event && static_cast<std::int32_t>(g.landing_event) == event_id) {
             return &g;
         }
     }
@@ -377,6 +389,9 @@ bool BossGateSkipCondition(std::int32_t event_id, int bank, int id, std::uint32_
         return false;
     }
     const BossGate* g = BossGateByEvent(event_id);
+    if (!g) {
+        g = BossGateByLandingEvent(event_id);
+    }
     return g && g->host_flag == flag;
 }
 
@@ -3269,6 +3284,36 @@ void WorldactRewriter(int event_id, int bank, int id, std::uint64_t event, std::
 }
 } // namespace
 
+namespace {
+/// A shared key treasure was given to this member (party_items ApplySummoned): the treasure lying in
+/// its game's copy of the host's world is taken out of MapItemMan (kind 3 list at +0x28, node +0x20 handle,
+/// +0x28 pickup flag) with the game's own removal 0x17D6780(man, &handle, set_flag = 0): no flag is set, the
+/// record and its object go. The spawn of a later load checks the own save's flag (set by the give).
+bool HideTreasureByFlag(std::uint32_t flag) {
+    std::uint64_t man = 0, node = 0;
+    if (!SafeGet(Guest(0x553d6e0), &man) || !man || !SafeGet(man + 0x28, &node)) {
+        return false;
+    }
+    using Remove = void(BB_COOP_SYSV*)(std::uint64_t, std::int32_t*, std::uint8_t);
+    for (int guard = 0; node && guard < 4096; ++guard) {
+        std::uint32_t f = 0;
+        SafeGet(node + 0x28, &f);
+        if (f == flag) {
+            std::int32_t handle = 0;
+            if (!SafeGet(node + 0x20, &handle)) {
+                return false;
+            }
+            reinterpret_cast<Remove>(Guest(0x17d6780))(man, &handle, 0);
+            return true;
+        }
+        if (!SafeGet(node, &node)) {
+            break;
+        }
+    }
+    return false;
+}
+} // namespace
+
 void Init() {
     State& st = S();
     if (!st.enabled) {
@@ -3276,6 +3321,7 @@ void Init() {
     }
     SetEmevdRewriter3(&WorldactRewriter);
     EnsureEmevdFilter();
+    SetTreasureHider(&HideTreasureByFlag);
     // push rbp; mov rbp, rsp; push r15; push r14; push r13; push r12; push rbx (13 bytes, both).
     const bool a = HookPrologue(0x13AE370, {0x55, 0x48, 0x89, 0xe5, 0x41, 0x57, 0x41, 0x56, 0x41, 0x55, 0x41, 0x54, 0x53},
                                 &LocalKickEntry, "ObjAct local kick (log)");
@@ -3390,6 +3436,9 @@ void FogPutBackTick(const GameSnapshot& s) {
 
 bool GuestFogSkipAllowed(std::int32_t guest_event) {
     const BossGate* g = BossGateByEvent(guest_event);
+    if (!g) {
+        g = BossGateByLandingEvent(guest_event);
+    }
     if (!g) {
         return true;
     }
