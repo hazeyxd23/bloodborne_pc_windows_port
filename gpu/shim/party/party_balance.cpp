@@ -1190,7 +1190,9 @@ void ChrDumpTick(const GameSnapshot& s) {
             char k[48];
             // HP and team too (D11: an NPC hunter's HP on every game during a fight, its team switch
             // 2004[2] mid-fight), at most one dump a second
-            std::snprintf(k, sizeof k, "%d/%d/%d/%d;", entity, hp, off ? 1 : 0, Field<int>(chr, 0x88, -1));
+            // and the height in 4 m steps (0.7.6: a chr falling out of the world, Annalise's chamber)
+            std::snprintf(k, sizeof k, "%d/%d/%d/%d/%d;", entity, hp, off ? 1 : 0, Field<int>(chr, 0x88, -1),
+                          int(std::floor(p[1] / 4.0f)));
             sig += k;
         }
     }
