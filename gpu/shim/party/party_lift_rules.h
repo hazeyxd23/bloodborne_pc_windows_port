@@ -158,6 +158,18 @@ inline bool LocalEndToAllPlayers(std::int32_t event_id, std::int32_t bank, std::
 /// sample after a put-back; and at most kRiderMaxPuts
 /// put-backs a ride (then the fall recovery has it). The car object's own matrix does not follow the
 /// ride (live: 2701032 reads its top height with the car at the bottom), so the height stays a guess.
+///
+/// liftsink (player reports, Nightwatch Co-op 0.2.3-0.2.4 = our 0.7.4 / 0.7.5, own world, no session:
+/// m24_00 and m33_00 lifts riding down at ~7.5 m/s): the rider sank through the car, was put back
+/// 1.4 m higher, sank again 1.0-1.5 m under the guess, ~30 times down the shaft (0.7.4) or 3 times
+/// and then fell the rest of it (0.7.5), and died 21-24 m lower. From the logs (not yet seen live),
+/// the guess ran under the real floor:
+/// the speed came from ONE frame's step (at 60 FPS a few cm of the chr's stutter on a descending car
+/// is several m/s, and the last frames before the bit goes off are the chr already sinking), and the
+/// put-back was only 0.3 m over it, so it went into the car's floor and through it again. Now the
+/// speed is measured over kRiderSpeedWindow of ride samples, and the put-back drops the rider onto the
+/// car from kRiderPutAbove over the guess (too high is a short drop onto the car; too low is through
+/// it again).
 struct RiderTrack {
     bool riding = false;
     double t = 0;
@@ -165,11 +177,15 @@ struct RiderTrack {
     std::int32_t anim = -1;             // lifts2: the car animation of the last ride sample
     bool after_put = false;             // lifts2: the next ride sample follows a put-back (no speed from it)
     int puts = 0;                       // lifts2: put-backs this ride
+    double vt = 0;                      // liftsink: where the speed window began (time, chr height)
+    float vy0 = 0;
 };
 constexpr float kRiderSlip = 1.0f;      // m below the car's height before it counts as a drop through it
 constexpr float kRiderSideways = 1.0f;  // m sideways from the last ride sample: stepped off (no put-back)
 constexpr double kRiderWindow = 2.0;    // s after the last ride sample: no longer this ride
 constexpr int kRiderMaxPuts = 3;        // lifts2: put-backs a ride at most
+constexpr double kRiderSpeedWindow = 0.25;  // liftsink: s of ride samples one speed is measured over
+constexpr float kRiderPutAbove = 1.0f;      // liftsink: m over the car's guessed height a put-back lands
 enum class RiderStep { idle, riding, through, off };
 /// One sample of the local chr while `car_playing` (a lift car within reach plays a ride animation).
 /// `put` gets the spot to put it back at for `through`. `anim`: the car's animation (-1: not known).
@@ -182,13 +198,17 @@ inline RiderStep RiderTick(RiderTrack& r, bool car_playing, bool ride_bit, doubl
     if (ride_bit) {
         const double dt = t - r.t;
         const bool same_segment = r.riding && anim == r.anim;
-        if (same_segment && !r.after_put && dt > 0.0 && dt < 0.5) {
-            const float v = float((y - r.y) / dt);
+        if (!same_segment) {
+            r.vy = 0;  // a new ride, or the car turned (another animation): measured afresh
+        }
+        if (!same_segment || r.after_put || dt <= 0.0 || dt >= 0.5) {
+            r.vt = t, r.vy0 = y;  // liftsink: a new speed window (no speed across a gap or a put-back)
+        } else if (t - r.vt >= kRiderSpeedWindow) {
+            const float v = float((y - r.vy0) / (t - r.vt));
             if (std::fabs(v) < 16.0f) {  // a lift's speed (deathrules::kLiftMaxRate)
                 r.vy = v;
             }
-        } else if (!same_segment) {
-            r.vy = 0;  // a new ride, or the car turned (another animation): measured afresh
+            r.vt = t, r.vy0 = y;
         }
         r.riding = true;
         r.after_put = false;
@@ -214,7 +234,7 @@ inline RiderStep RiderTick(RiderTrack& r, bool car_playing, bool ride_bit, doubl
     if (y >= car - kRiderSlip) {
         return RiderStep::riding;  // the bit flickers (a roll, a jump in the car): still on it
     }
-    put[0] = r.x, put[1] = car + 0.3f, put[2] = r.z;
+    put[0] = r.x, put[1] = car + kRiderPutAbove, put[2] = r.z;
     r.t = t, r.y = car;  // the next sample measures from here
     r.after_put = true;
     ++r.puts;

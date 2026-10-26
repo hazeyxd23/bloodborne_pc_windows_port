@@ -176,9 +176,10 @@ int main() {
         // through the floor: the bit off, straight down at 9 m/s for 0.3 s
         CHECK(RiderTick(r, true, false, t + 0.3, -344.6f, y - 2.8f, -792.9f, put) == RiderStep::through);
         CHECK(std::fabs(put[0] + 344.6f) < 0.01f && std::fabs(put[2] + 793.0f) < 0.01f);
-        CHECK(put[1] > y - 1.0f && put[1] < y);  // the car's height then, 0.75 m lower, + 0.3
+        // the car's height then, 0.75 m lower, + kRiderPutAbove (liftsink: dropped onto the car from over it)
+        CHECK(std::fabs(put[1] - (y - 0.75f + kRiderPutAbove)) < 0.05f);
         // back on the car: riding again
-        CHECK(RiderTick(r, true, true, t + 0.4, -344.6f, put[1] - 0.2f, -793.0f, put) == RiderStep::riding);
+        CHECK(RiderTick(r, true, true, t + 0.4, -344.6f, put[1] - kRiderPutAbove, -793.0f, put) == RiderStep::riding);
         // walked off an open platform (sideways), or long gone: no put-back
         RiderTrack w = r;
         CHECK(RiderTick(w, true, false, t + 0.6, -342.0f, put[1] - 3.0f, -793.0f, put) == RiderStep::off && !w.riding);
@@ -228,7 +229,7 @@ int main() {
             float y = -82.9f;
             ride_up(r, t, y, 6);
             CHECK(RiderTick(r, true, false, t + 0.3, -216.6f, y - 1.5f, 279.4f, put, 6) == RiderStep::through);
-            CHECK(std::fabs(put[1] - (y + 1.5f + 0.3f)) < 0.1f && r.after_put && r.puts == 1);
+            CHECK(std::fabs(put[1] - (y + 1.5f + kRiderPutAbove)) < 0.1f && r.after_put && r.puts == 1);
             // landed on the car again: that first sample gives no speed (the warp is not the car's motion)
             const float vy = r.vy;
             CHECK(RiderTick(r, true, true, t + 0.32, -216.6f, put[1] - 0.1f, 279.4f, put, 6) == RiderStep::riding);
@@ -254,6 +255,77 @@ int main() {
             ride_up(r, t, y, -1);
             CHECK(r.vy > 4.5f);
             CHECK(RiderTick(r, true, true, t + 1.0 / 30, -216.6f, y, 279.4f, put, 2) == RiderStep::riding && r.vy == 0.0f);
+        }
+    }
+
+    // liftsink: the reports' rides down (m24_00 / m33_00, ~7.5 m/s at 60 FPS, own world). The chr
+    // stutters a few cm on the descending car and sinks into its floor in the last frames before its
+    // ride bit goes off. 0.7.5 took the speed from that last frame's step (far faster than the car), so
+    // the guess ran under the floor and every put-back, 0.3 m over it, went through the car again.
+    {
+        const float car_v = -7.5f, top = 6.4f;
+        auto car_at = [&](double t) { return top + car_v * float(t); };
+        auto ride_down = [&](RiderTrack& r, double& t) {
+            float put[3];
+            for (int k = 0; k < 90; ++k, t += 1.0 / 60) {
+                const float jitter = (k % 3 == 0) ? -0.06f : (k % 3 == 1 ? 0.04f : 0.0f);
+                CHECK(RiderTick(r, true, true, t, 12.0f, car_at(t) + jitter, -40.0f, put, 5) == RiderStep::riding);
+            }
+            // the last two ride samples: the chr already sinking into the floor (12 m/s for a frame)
+            CHECK(RiderTick(r, true, true, t, 12.0f, car_at(t) - 0.05f, -40.0f, put, 5) == RiderStep::riding);
+            t += 1.0 / 60;
+            CHECK(RiderTick(r, true, true, t, 12.0f, car_at(t) - 0.12f, -40.0f, put, 5) == RiderStep::riding);
+        };
+        // the speed is the car's, not the stutter's nor the sinking frame's
+        {
+            RiderTrack r;
+            double t = 0;
+            ride_down(r, t);
+            CHECK(std::fabs(r.vy - car_v) < 1.0f);
+        }
+        // the bit off and the chr through the floor: put back over the real car, not into its floor
+        {
+            RiderTrack r;
+            double t = 0;
+            ride_down(r, t);
+            const double t0 = t;
+            float put[3] = {};
+            RiderStep st = RiderStep::riding;
+            double tt = t0;
+            for (int k = 1; k < 60 && st != RiderStep::through; ++k) {
+                tt = t0 + k / 60.0;
+                const float fall = 0.5f * 9.8f * float((tt - t0) * (tt - t0));  // falling out of the car
+                st = RiderTick(r, true, false, tt, 12.0f, car_at(tt) - 0.12f - fall, -40.0f, put, 5);
+            }
+            CHECK(st == RiderStep::through);
+            CHECK(put[1] > car_at(tt) + 0.2f && put[1] < car_at(tt) + 2.0f);  // over the floor, a short drop
+            CHECK(std::fabs(put[0] - 12.0f) < 0.01f && std::fabs(put[2] + 40.0f) < 0.01f);
+        }
+        // the bit off while the chr stays on the car (it rides on, 7.5 m/s down): never a put-back
+        {
+            RiderTrack r;
+            double t = 0;
+            ride_down(r, t);
+            float put[3];
+            int puts = 0;
+            for (int k = 1; k < 100; ++k) {
+                const double tt = t + k / 60.0;
+                puts += RiderTick(r, true, false, tt, 12.0f, car_at(tt), -40.0f, put, 5) == RiderStep::through;
+            }
+            CHECK(puts == 0);
+        }
+        // a ride shorter than one speed window: no speed yet (the car is still), the guess stays at the
+        // last ride sample, so a put-back lands over the car, never under it
+        {
+            RiderTrack r;
+            float put[3] = {};
+            for (int k = 0; k < 10; ++k) {
+                CHECK(RiderTick(r, true, true, k / 60.0, 12.0f, car_at(k / 60.0), -40.0f, put, 5) == RiderStep::riding);
+            }
+            CHECK(r.vy == 0.0f);
+            const double tt = 9 / 60.0 + 0.3;
+            CHECK(RiderTick(r, true, false, tt, 12.0f, car_at(tt) - 1.5f, -40.0f, put, 5) == RiderStep::through);
+            CHECK(put[1] > car_at(tt));
         }
     }
 

@@ -3039,8 +3039,11 @@ void LiftRiderTick(const GameSnapshot& s) {
     alignas(16) float r16[4] = {rot[0], rot[1], rot[2], rot[3]};
     const bool ok = b2::LocalChrWarp(s.player, to, r16, "a drop through a lift's car: back on the car");
     if (logged++ < 32) {
+        // liftsink: the car's guessed height and speed with each put-back (the reports had neither)
+        const float car_y = put[1] - liftrules::kRiderPutAbove;
         Log("lift ride: the local chr dropped through the moving car at (%.1f, %.1f, %.1f) (ride bit off, %.1f m under "
-            "the car); %s (%.1f, %.1f, %.1f)", double(me[0]), double(me[1]), double(me[2]), double(put[1] - 0.3f - me[1]),
+            "the car: guessed at %.1f, %.1f m/s, put-back %d of %d); %s (%.1f, %.1f, %.1f)", double(me[0]), double(me[1]),
+            double(me[2]), double(car_y - me[1]), double(car_y), double(track.vy), track.puts, liftrules::kRiderMaxPuts,
             ok ? "put back on the car at" : "NOT put back to", double(put[0]), double(put[1]), double(put[2]));
     }
 }
